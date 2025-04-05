@@ -1,0 +1,143 @@
+# Default values for app
+# This is a YAML-formatted file.
+
+replicaCount: 2
+
+image:
+  repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/app
+  tag: latest
+  pullPolicy: Always
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Node selector for the app pods (run on services nodes)
+nodeSelector:
+  node-role: services
+
+# No explicit tolerations as services nodes are not tainted
+
+# Resources for the app container
+resources:
+  limits:
+    cpu: 200m
+    memory: 300Mi
+  requests:
+    cpu: 100m
+    memory: 200Mi
+
+# Service configurations
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 5000
+
+# Ingress configurations
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # ACM certificate ARN will be added here
+    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...
+  hosts:
+    - host: app.blizzard.co.il
+      paths:
+        - path: /
+          pathType: Prefix
+
+# Weather API key (base64 encoded)
+# This is a placeholder. In production, inject the actual value via CI/CD
+weatherApiKey: "cGxhY2Vob2xkZXI="  # "placeholder" in base64
+
+# Environment variables
+env:
+  - name: WELCOME_MESSAGE
+    value: "Welcome to the EKS Python Demo App on Blizzard Cloud!"
+  - name: WEATHER_API_URL
+    value: "https://api.openweathermap.org/data/2.5/weather"
+
+# Secrets references
+secrets:
+  - name: WEATHER_API_KEY
+    secretKeyRef:
+      name: app-secrets
+      key: weather-api-key
+  - name: DB_HOST
+    secretKeyRef:
+      name: mysql-secrets
+      key: host
+  - name: DB_USER
+    secretKeyRef:
+      name: mysql-secrets
+      key: username
+  - name: DB_PASSWORD
+    secretKeyRef:
+      name: mysql-secrets
+      key: password
+  - name: DB_NAME
+    secretKeyRef:
+      name: mysql-secrets
+      key: database
+
+# Pod disruption budget for HA
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Prometheus annotations for metrics scraping
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "5000"
+
+# ServiceMonitor configuration for Prometheus Operator
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: prometheus
+  interval: 15s
+  scrapeTimeout: 10s
+
+# PrometheusRule for alerts
+prometheusRule:
+  enabled: true
+  additionalLabels:
+    release: prometheus
+  highRequestRateThreshold: 10
+  highErrorRateThreshold: 5
+  slowResponseTimeThreshold: 1
+
+# Pod security context
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+# Container security context
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 5000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 5000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3

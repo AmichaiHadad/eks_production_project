@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: app
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: app-us-east-1
+            cluster: eks-blizzard-us-east-1
+            url: https://kubernetes.default.svc
+            region: us-east-1
+          - name: app-us-west-2
+            cluster: eks-blizzard-us-west-2
+            url: https://kubernetes.default.svc
+            region: us-west-2
+  template:
+    metadata:
+      name: '{{name}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/your-org/eks-gitops.git
+        targetRevision: main
+        path: helm-chart/app
+        helm:
+          valueFiles:
+            - values.yaml
+          parameters:
+            - name: image.repository
+              value: '{{region}}.dkr.ecr.{{region}}.amazonaws.com/app'
+            - name: ingress.hosts[0].host
+              value: 'app.{{region}}.blizzard.co.il'
+      destination:
+        server: '{{url}}'
+        namespace: app
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

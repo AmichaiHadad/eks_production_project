@@ -1,0 +1,118 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: custom-alerts
+  namespace: monitoring
+  labels:
+    app: kube-prometheus-stack
+    release: prometheus
+spec:
+  groups:
+  - name: mysql.rules
+    rules:
+    - alert: MySQLHighConnectionCount
+      expr: mysql_global_status_threads_connected > 100
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: MySQL high connection count (instance {{ $labels.instance }})
+        description: "MySQL has high number of connections\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    
+    - alert: MySQLTooManyConnections
+      expr: mysql_global_status_threads_connected > 200
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: MySQL too many connections (instance {{ $labels.instance }})
+        description: "MySQL has too many connections\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+  
+  - name: elasticsearch.rules
+    rules:
+    - alert: ElasticsearchClusterRed
+      expr: elasticsearch_cluster_health_status{color="red"} == 1
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: Elasticsearch cluster red (instance {{ $labels.instance }})
+        description: "Elasticsearch cluster is red\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    
+    - alert: ElasticsearchClusterYellow
+      expr: elasticsearch_cluster_health_status{color="yellow"} == 1
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: Elasticsearch cluster yellow (instance {{ $labels.instance }})
+        description: "Elasticsearch cluster is yellow\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    
+    - alert: ElasticsearchHeapTooHigh
+      expr: elasticsearch_jvm_heap_used_percent > 85
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Elasticsearch heap too high (instance {{ $labels.instance }})
+        description: "Elasticsearch heap usage is too high\n  VALUE = {{ $value }}%\n  LABELS = {{ $labels }}"
+  
+  - name: app.rules
+    rules:
+    - alert: AppHighErrorRate
+      expr: rate(http_requests_total{status=~"5.*"}[5m]) / rate(http_requests_total[5m]) > 0.05
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Application high error rate (instance {{ $labels.instance }})
+        description: "Application is returning a high number of 5xx errors\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+    
+    - alert: AppHighResponseTime
+      expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: Application high response time (instance {{ $labels.instance }})
+        description: "Application p95 response time is high\n  VALUE = {{ $value }}s\n  LABELS = {{ $labels }}"
+  
+  - name: karpenter.rules
+    rules:
+    - alert: KarpenterFailedToCreateNode
+      expr: sum(rate(karpenter_nodes_created_errors_total[5m])) > 0
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: Karpenter failed to create nodes
+        description: "Karpenter is failing to create nodes. Check AWS capacity or Karpenter configuration."
+    
+    - alert: KarpenterHighPendingPods
+      expr: sum(kube_pod_status_phase{phase="Pending"}) > 10
+      for: 15m
+      labels:
+        severity: warning
+      annotations:
+        summary: High number of pending pods
+        description: "There are more than 10 pods pending for over 15 minutes. Investigate cluster capacity or scheduling issues."
+  
+  - name: node.rules
+    rules:
+    - alert: HighNodeCPU
+      expr: instance:node_cpu_utilisation:rate5m > 0.8
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: High CPU usage on node (instance {{ $labels.instance }})
+        description: "Node CPU usage is above 80%\n  VALUE = {{ $value }}%\n  LABELS = {{ $labels }}"
+    
+    - alert: HighNodeMemory
+      expr: instance:node_memory_utilisation:ratio > 0.85
+      for: 10m
+      labels:
+        severity: warning
+      annotations:
+        summary: High memory usage on node (instance {{ $labels.instance }})
+        description: "Node memory usage is above 85%\n  VALUE = {{ $value }}%\n  LABELS = {{ $labels }}"

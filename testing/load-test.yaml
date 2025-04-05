@@ -1,0 +1,33 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-test
+spec:
+  template:
+    spec:
+      containers:
+      - name: load-test
+        image: loadimpact/k6:latest
+        command: ["k6", "run", "-"]
+        stdin: true
+        stdinOnce: true
+        args:
+        - |
+          import http from 'k6/http';
+          import { sleep } from 'k6';
+
+          export const options = {
+            stages: [
+              { duration: '30s', target: 10 }, // Ramp up to 10 virtual users over 30 seconds
+              { duration: '2m', target: 50 },  // Ramp up to 50 virtual users over 2 minutes
+              { duration: '3m', target: 50 },  // Stay at 50 virtual users for 3 minutes
+              { duration: '1m', target: 0 },   // Ramp down to 0 virtual users over 1 minute
+            ],
+          };
+
+          export default function() {
+            http.get('https://app.blizzard.co.il/');
+            sleep(0.1); // Sleep for 100ms between requests
+          }
+      restartPolicy: Never
+  backoffLimit: 0

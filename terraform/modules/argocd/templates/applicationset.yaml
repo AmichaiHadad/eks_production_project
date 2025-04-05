@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ${name}
+  namespace: ${namespace}
+spec:
+  generators:
+    - git:
+        repoURL: ${repo_url}
+        revision: ${target_revision}
+        directories:
+          - path: ${path}/*
+  template:
+    metadata:
+      name: '{{path.basename}}'
+    spec:
+      project: default
+      source:
+        repoURL: ${repo_url}
+        targetRevision: ${target_revision}
+        path: '{{path}}'
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: ${target_namespace}
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: ${self_heal}
+          %{if auto_sync}
+          allowEmpty: true
+          %{endif}
+        syncOptions:
+          - CreateNamespace=true
+          - PrunePropagationPolicy=foreground
+          - PruneLast=true

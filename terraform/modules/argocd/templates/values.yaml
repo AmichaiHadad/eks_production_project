@@ -1,0 +1,121 @@
+## Argo CD Helm chart values
+
+## Server configurations
+server:
+  # Server service type
+  service:
+    type: ${service_type}
+
+  # Configure ingress
+  ingress:
+    enabled: ${ingress_enabled}
+    hosts:
+      - ${ingress_host}
+    %{if ingress_tls_secret != ""}
+    tls:
+      - secretName: ${ingress_tls_secret}
+        hosts:
+          - ${ingress_host}
+    %{endif}
+    annotations:
+      kubernetes.io/ingress.class: alb
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      %{if ingress_tls_secret != ""}
+      alb.ingress.kubernetes.io/certificate-arn: ${ingress_tls_secret}
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: "443"
+      %{endif}
+
+  # Schedule on management nodes
+  nodeSelector: ${node_selector}
+  tolerations:
+    - key: ${toleration_key}
+      value: ${toleration_value}
+      effect: ${toleration_effect}
+
+## Controller configurations
+controller:
+  # Schedule on management nodes
+  nodeSelector: ${node_selector}
+  tolerations:
+    - key: ${toleration_key}
+      value: ${toleration_value}
+      effect: ${toleration_effect}
+
+## Repo server configurations  
+repoServer:
+  # Schedule on management nodes
+  nodeSelector: ${node_selector}
+  tolerations:
+    - key: ${toleration_key}
+      value: ${toleration_value}
+      effect: ${toleration_effect}
+
+## ApplicationSet controller
+applicationSet:
+  enabled: true
+  # Schedule on management nodes
+  nodeSelector: ${node_selector}
+  tolerations:
+    - key: ${toleration_key}
+      value: ${toleration_value}
+      effect: ${toleration_effect}
+
+## Redis configurations
+redis:
+  # Schedule on management nodes
+  nodeSelector: ${node_selector}
+  tolerations:
+    - key: ${toleration_key}
+      value: ${toleration_value}
+      effect: ${toleration_effect}
+
+## Dex (OIDC provider)
+dex:
+  enabled: false
+
+## High Availability
+ha:
+  enabled: false
+
+## RBAC configuration
+rbac:
+  # Create cluster roles and cluster role bindings
+  create: true
+  # Policy default is to 'role:readonly' for non-admin users
+  policy.default: role:readonly
+
+## Config management plugins
+configManagementPlugins: |
+  - name: helmfile
+    init:
+      command: ["helmfile", "deps"]
+    generate:
+      command: ["helmfile", "template"]
+  - name: kustomize
+    generate:
+      command: ["kustomize", "build"]
+
+## Other configurations
+configs:
+  # Automatically sync when application is created
+  params:
+    server.insecure: false
+    application.instanceLabelKey: argocd.argoproj.io/instance
+
+  # Resource customizations
+  resourceCustomizations: |
+    apps/Deployment:
+      health.lua: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.readyReplicas ~= nil and obj.status.readyReplicas > 0 then
+            hs.status = "Healthy"
+          elseif obj.status.replicas == 0 then
+            hs.status = "Suspended"
+          end
+        end
+        return hs

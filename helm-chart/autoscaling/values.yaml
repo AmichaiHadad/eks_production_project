@@ -1,0 +1,90 @@
+# Global values
+clusterName: eks-blizzard-us-east-1
+region: us-east-1
+
+# Karpenter configuration
+karpenter:
+  enabled: true
+  serviceAccount:
+    create: true
+    name: karpenter-controller
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/eks-blizzard-us-east-1-karpenter-controller"
+  
+  settings:
+    aws:
+      clusterName: eks-blizzard-us-east-1
+      clusterEndpoint: https://example-endpoint.eks.amazonaws.com
+      defaultInstanceProfile: KarpenterNodeInstanceProfile-eks-blizzard-us-east-1
+  
+  controller:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 1
+        memory: 1Gi
+  
+  # Pod affinity to run on management node group
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: node-role
+            operator: In
+            values:
+            - management
+    tolerations:
+    - key: "management"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+
+# KEDA configuration
+keda:
+  enabled: true
+  serviceAccount:
+    create: true
+    name: keda-operator
+    annotations:
+      eks.amazonaws.com/role-arn: "arn:aws:iam::123456789012:role/eks-blizzard-us-east-1-keda-controller"
+  
+  podSecurityContext:
+    runAsUser: 1000
+    fsGroup: 1000
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  
+  # Pod affinity to run on management node group
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: node-role
+            operator: In
+            values:
+            - management
+    tolerations:
+    - key: "management"
+      operator: "Equal"
+      value: "true"
+      effect: "NoSchedule"
+  
+  metricsServer:
+    rbac:
+      create: true
+  
+  prometheus:
+    metricServer:
+      enabled: true
+      podMonitor:
+        enabled: true

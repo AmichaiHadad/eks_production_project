@@ -1,0 +1,18 @@
+apiVersion: v2
+name: monitoring
+description: A Helm chart for Prometheus, Grafana, and Alertmanager monitoring stack
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+# Using Prometheus Community Helm charts
+dependencies:
+  - name: kube-prometheus-stack
+    version: "55.5.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+  - name: prometheus-mysql-exporter
+    version: "1.12.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+  - name: prometheus-elasticsearch-exporter
+    version: "5.0.0"
+    repository: "https://prometheus-community.github.io/helm-charts"

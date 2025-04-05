@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecr-scan-policy
+  namespace: default
+data:
+  policy.json: |
+    {
+      "rules": [
+        {
+          "scanFrequency": "SCAN_ON_PUSH",
+          "repositories": [
+            "*"
+          ]
+        }
+      ]
+    }

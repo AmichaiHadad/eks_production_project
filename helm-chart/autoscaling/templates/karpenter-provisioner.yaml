@@ -1,0 +1,58 @@
+apiVersion: karpenter.sh/v1alpha5
+kind: Provisioner
+metadata:
+  name: default
+spec:
+  # Requirements for the nodes to be provisioned
+  requirements:
+    - key: "node.kubernetes.io/instance-type"
+      operator: In
+      values: ["m5.large", "m5.xlarge", "c5.large", "c5.xlarge", "r5.large"]
+    - key: "topology.kubernetes.io/zone"
+      operator: In
+      values: ["{{ .Values.region }}a", "{{ .Values.region }}b", "{{ .Values.region }}c"]
+    - key: "kubernetes.io/arch"
+      operator: In
+      values: ["amd64"]
+    - key: "karpenter.sh/capacity-type"
+      operator: In
+      values: ["on-demand", "spot"]
+  
+  # Resource limits to prevent Karpenter from creating an excessive number of nodes
+  limits:
+    resources:
+      cpu: 100
+      memory: 200Gi
+  
+  # Set TTL for nodes to be terminated when pods are finished
+  ttlSecondsAfterEmpty: 60
+  
+  # Set max TTL for nodes to force recycling
+  ttlSecondsUntilExpired: 43200  # 12 hours
+  
+  # Enable node consolidation for cost optimization
+  consolidation:
+    enabled: true
+  
+  # Specify labels that will be added to nodes
+  labels:
+    provisioning-group: karpenter
+    node-role: services
+  
+  # Provider-specific configuration
+  provider:
+    securityGroupSelector:
+      kubernetes.io/cluster/{{ .Values.clusterName }}: owned
+    subnetSelector:
+      kubernetes.io/cluster/{{ .Values.clusterName }}: owned
+      Type: Private
+    tags:
+      karpenter.sh/discovery: {{ .Values.clusterName }}
+      created-by: karpenter
+    blockDeviceMappings:
+      - deviceName: /dev/xvda
+        ebs:
+          volumeSize: 50Gi
+          volumeType: gp3
+          iops: 3000
+          encrypted: true

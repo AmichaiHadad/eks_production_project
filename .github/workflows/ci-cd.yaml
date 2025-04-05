@@ -1,0 +1,91 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'helm-chart/**'
+      - '.github/workflows/ci-cd.yaml'
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials for us-east-1
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Login to Amazon ECR us-east-1
+        id: login-ecr-us-east-1
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Build, tag, and push image to Amazon ECR us-east-1
+        id: build-image-us-east-1
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr-us-east-1.outputs.registry }}
+          ECR_REPOSITORY: app
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./app
+        run: |
+          # Build a docker container and push it to ECR
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      
+      - name: Configure AWS credentials for us-west-2
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+      
+      - name: Login to Amazon ECR us-west-2
+        id: login-ecr-us-west-2
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Build, tag, and push image to Amazon ECR us-west-2
+        id: build-image-us-west-2
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr-us-west-2.outputs.registry }}
+          ECR_REPOSITORY: app
+          IMAGE_TAG: ${{ github.sha }}
+        working-directory: ./app
+        run: |
+          # Build a docker container and push it to ECR
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG -t $ECR_REGISTRY/$ECR_REPOSITORY:latest .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      
+      - name: Update Helm chart values with new image tag
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Update the image.tag value in the Helm chart values.yaml
+          sed -i -e "s/tag: latest/tag: $IMAGE_TAG/g" helm-chart/app/values.yaml
+          
+          # Update the Chart version and appVersion
+          sed -i -e "s/version: .*/version: 0.1.${GITHUB_RUN_NUMBER}/g" helm-chart/app/Chart.yaml
+          sed -i -e "s/appVersion: .*/appVersion: \"$IMAGE_TAG\"/g" helm-chart/app/Chart.yaml
+          
+          # Display changes
+          echo "Updated Helm chart with new image tag: $IMAGE_TAG"
+          cat helm-chart/app/values.yaml | grep -A 3 "image:"
+          cat helm-chart/app/Chart.yaml | grep -E "version:|appVersion:"
+      
+      - name: Commit and push changes to Git
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add helm-chart/app/values.yaml helm-chart/app/Chart.yaml
+          git commit -m "Update image tag to ${{ github.sha }} [skip ci]"
+          git push

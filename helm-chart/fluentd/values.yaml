@@ -1,0 +1,96 @@
+# Fluentd Helm chart values
+fluentd:
+  # Fluentd configuration
+  configMapName: ""
+  
+  # Use DaemonSet to run on all nodes
+  forwarder:
+    enabled: true
+    daemonset:
+      enabled: true
+    configMap: fluentd-forwarder
+  
+  # Disable aggregator deployment - we'll send logs directly to Elasticsearch
+  aggregator:
+    enabled: false
+  
+  # Environment variables
+  extraEnvVars:
+    - name: FLUENTD_CONF
+      value: "fluentd.conf"
+    - name: ELASTICSEARCH_HOST
+      value: "elasticsearch-master"
+    - name: ELASTICSEARCH_PORT
+      value: "9200"
+    - name: ELASTICSEARCH_SCHEME
+      value: "http"
+  
+  # Configure Fluentd
+  configMap: |-
+    # Fluentd configuration
+    <source>
+      @type tail
+      path /var/log/containers/*.log
+      pos_file /opt/bitnami/fluentd/logs/containers.log.pos
+      tag kubernetes.*
+      read_from_head true
+      <parse>
+        @type json
+        time_format %Y-%m-%dT%H:%M:%S.%NZ
+      </parse>
+    </source>
+
+    # Add Kubernetes metadata
+    <filter kubernetes.**>
+      @type kubernetes_metadata
+    </filter>
+
+    # Detect exceptions in the log output
+    <filter kubernetes.**>
+      @type grep
+      <regexp>
+        key log
+        pattern (Exception|Error|error|ERROR|FAULT|Fault|fatal|FATAL)
+      </regexp>
+    </filter>
+
+    # Send logs to Elasticsearch
+    <match kubernetes.**>
+      @type elasticsearch
+      host "#{ENV['ELASTICSEARCH_HOST']}"
+      port "#{ENV['ELASTICSEARCH_PORT']}"
+      scheme "#{ENV['ELASTICSEARCH_SCHEME']}"
+      logstash_format true
+      logstash_prefix k8s-logs
+      <buffer>
+        @type file
+        path /opt/bitnami/fluentd/logs/buffers/k8s
+        flush_thread_count 2
+        flush_interval 5s
+        chunk_limit_size 2M
+        queue_limit_length 32
+        retry_max_interval 30
+        retry_forever true
+      </buffer>
+    </match>
+  
+  # Resource allocations
+  resources:
+    limits:
+      cpu: 100m
+      memory: 200Mi
+    requests:
+      cpu: 50m
+      memory: 100Mi
+  
+  # Run on all nodes
+  tolerations:
+    - operator: Exists
+
+  # RBAC settings
+  rbac:
+    create: true
+    
+  # Service account
+  serviceAccount:
+    create: true

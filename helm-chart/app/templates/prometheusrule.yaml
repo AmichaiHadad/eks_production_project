@@ -1,0 +1,59 @@
+{{- if .Values.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+    {{- with .Values.prometheusRule.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+  - name: {{ include "app.fullname" . }}.rules
+    rules:
+    - alert: HighRequestRate
+      expr: sum(rate(http_requests_total{app="{{ include "app.fullname" . }}"}[5m])) > {{ .Values.prometheusRule.highRequestRateThreshold }}
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High request rate on application"
+        description: "Application is receiving more than {{ .Values.prometheusRule.highRequestRateThreshold }} requests per second for 5 minutes"
+    
+    - alert: HighErrorRate
+      expr: sum(rate(http_requests_total{app="{{ include "app.fullname" . }}", status=~"5.."}[5m])) / sum(rate(http_requests_total{app="{{ include "app.fullname" . }}"}[5m])) * 100 > {{ .Values.prometheusRule.highErrorRateThreshold }}
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High error rate on application"
+        description: "Application error rate is above {{ .Values.prometheusRule.highErrorRateThreshold }}% for 5 minutes"
+    
+    - alert: SlowResponseTime
+      expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{app="{{ include "app.fullname" . }}"}[5m])) by (le)) > {{ .Values.prometheusRule.slowResponseTimeThreshold }}
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Slow response time on application"
+        description: "95th percentile latency is above {{ .Values.prometheusRule.slowResponseTimeThreshold }}s for 5 minutes"
+    
+    - alert: DatabaseErrors
+      expr: sum(rate(db_errors_total{app="{{ include "app.fullname" . }}"}[5m])) > 0
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Database errors detected"
+        description: "Application is experiencing database errors"
+    
+    - alert: WeatherAPIErrors
+      expr: sum(rate(temperature_fetch_errors_total{app="{{ include "app.fullname" . }}"}[5m])) > 0
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "Weather API errors detected"
+        description: "Application is experiencing errors fetching weather data"
+{{- end }}

@@ -1,0 +1,41 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: monitoring-us-east-1
+            cluster: eks-blizzard-us-east-1
+            url: https://kubernetes.default.svc
+            region: us-east-1
+          - name: monitoring-us-west-2
+            cluster: eks-blizzard-us-west-2
+            url: https://kubernetes.default.svc
+            region: us-west-2
+  template:
+    metadata:
+      name: '{{name}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/your-org/eks-gitops.git
+        targetRevision: main
+        path: helm-chart/monitoring
+        helm:
+          valueFiles:
+            - values.yaml
+          parameters:
+            - name: grafana.ingress.hosts[0]
+              value: 'grafana.{{region}}.blizzard.co.il'
+      destination:
+        server: '{{url}}'
+        namespace: monitoring
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

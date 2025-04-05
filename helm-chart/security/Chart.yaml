@@ -1,0 +1,19 @@
+apiVersion: v2
+name: security
+description: Security components for EKS cluster
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+dependencies:
+  - name: external-secrets
+    version: 0.9.9
+    repository: https://charts.external-secrets.io
+    condition: external-secrets.enabled
+  - name: polaris
+    version: 8.0.0
+    repository: https://charts.fairwinds.com/stable
+    condition: polaris.enabled
+  - name: trivy-operator
+    version: 0.19.0
+    repository: https://aquasecurity.github.io/helm-charts/
+    condition: trivy-operator.enabled

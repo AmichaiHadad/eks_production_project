@@ -1,0 +1,1 @@
+# No variables needed for this module as it uses fixed templates

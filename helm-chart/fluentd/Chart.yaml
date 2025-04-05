@@ -1,0 +1,12 @@
+apiVersion: v2
+name: fluentd
+description: A Helm chart for Fluentd to ship logs to Elasticsearch
+type: application
+version: 0.1.0
+appVersion: "v1.16.1"
+
+# Using Bitnami Fluentd as the upstream dependency
+dependencies:
+  - name: fluentd
+    version: "5.8.7"
+    repository: "https://charts.bitnami.com/bitnami"
