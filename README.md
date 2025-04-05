@@ -6,7 +6,16 @@
 
 This project implements a comprehensive, production-ready Kubernetes infrastructure on AWS EKS across multiple regions (us-east-1 and us-west-2) with a focus on high availability, security, and modern DevOps practices. It demonstrates a complete infrastructure-as-code approach using Terraform, Terragrunt, and GitOps methodologies to deploy and manage a resilient, scalable application infrastructure.
 
-![Architecture Overview](docs/images/architecture-diagram.png)
+## Documentation & Getting Started
+
+This project includes comprehensive documentation to help you deploy, debug, and understand the architecture:
+
+- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Complete step-by-step deployment instructions for the entire infrastructure
+- **[DEBUG.md](DEBUG.md)**: Thorough debugging guide covering every component with expected behaviors and commands
+- **[SECURITY-BEST-PRACTICES.md](docs/SECURITY-BEST-PRACTICES.md)**: Security recommendations and update procedures
+- **[AUTOSCALING.md](docs/AUTOSCALING.md)**: Details on Karpenter and KEDA implementation
+
+For a visual representation of the architecture, see [diagram_description.md](diagram_description.md) which provides a detailed description of the multi-region infrastructure design.
 
 ## Key Features
 
@@ -123,9 +132,13 @@ This project implements a comprehensive, production-ready Kubernetes infrastruct
 ├── testing/                          # Testing scripts
 │   ├── load-test.yaml                # Load testing configuration
 │   └── security-tests.sh             # Security testing script
+├── .gitignore                        # Git ignore file for project
 ├── ClaudeProgress.MD                 # Implementation progress tracker
+├── DEBUG.md                          # Comprehensive debugging guide for all components
+├── DEPLOYMENT.md                     # Step-by-step deployment instructions
 ├── Project_Master_Definition.md      # Original project requirements
-└── README.md                         # This file
+├── README.md                         # This file
+└── diagram_description.md            # Detailed architecture diagram description
 ```
 
 ## Architecture Design
