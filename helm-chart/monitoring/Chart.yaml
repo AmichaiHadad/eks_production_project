@@ -8,11 +8,11 @@ appVersion: "1.0.0"
 # Using Prometheus Community Helm charts
 dependencies:
   - name: kube-prometheus-stack
-    version: "55.5.0"
+    version: "51.4.0"
     repository: "https://prometheus-community.github.io/helm-charts"
   - name: prometheus-mysql-exporter
-    version: "1.12.0"
+    version: "1.14.0"
     repository: "https://prometheus-community.github.io/helm-charts"
   - name: prometheus-elasticsearch-exporter
-    version: "5.0.0"
+    version: "5.2.0"
     repository: "https://prometheus-community.github.io/helm-charts"

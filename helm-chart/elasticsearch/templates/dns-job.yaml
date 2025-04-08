@@ -1,0 +1,122 @@
+{{- if .Values.ingress.enabled }}
+{{- if .Values.ingress.manageDns }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: elasticsearch-dns-manager
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: elasticsearch
+    component: dns-manager
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+        component: dns-manager
+    spec:
+      serviceAccountName: {{ .Values.ingress.dnsServiceAccount | default "default" }}
+      restartPolicy: OnFailure
+      containers:
+      - name: dns-manager
+        image: amazon/aws-cli:2.13.13
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Find the load balancer from AWS CLI directly
+          echo "Waiting for ingress load balancer to be created and available..."
+          
+          # Set variables for resources to find
+          SERVICE_NAME="k8s-data-elastics"
+          MAX_ATTEMPTS=30
+          
+          # Find the load balancer by looking for ones with our service tag pattern
+          for i in $(seq 1 $MAX_ATTEMPTS); do
+            # Get a list of load balancers with name containing our service name pattern
+            LBS=$(aws elbv2 describe-load-balancers --query "LoadBalancers[?starts_with(LoadBalancerName, '${SERVICE_NAME}')].DNSName" --output text)
+            
+            # Check if we found any matching load balancers
+            if [ -n "$LBS" ]; then
+              # Just use the first match if multiple found
+              ADDRESS=$(echo "$LBS" | head -n1)
+              echo "Found load balancer: $ADDRESS"
+              break
+            fi
+            
+            echo "Attempt $i: No matching load balancer found yet, waiting 10 seconds..."
+            sleep 10
+          done
+          
+          if [ -z "$ADDRESS" ]; then
+            echo "Error: Failed to find load balancer after 5 minutes"
+            exit 1
+          fi
+
+          echo "Ingress address: $ADDRESS"
+
+          # Get the hosted zone ID
+          ZONE_ID=$(aws route53 list-hosted-zones-by-name --dns-name {{ .Values.ingress.domain }} --query "HostedZones[0].Id" --output text | cut -d/ -f3)
+          
+          if [ -z "$ZONE_ID" ] || [ "$ZONE_ID" == "None" ]; then
+            echo "Error: Could not find hosted zone for domain {{ .Values.ingress.domain }}"
+            exit 1
+          fi
+          
+          echo "Found hosted zone ID: $ZONE_ID"
+
+          # Check if record already exists
+          RECORD_EXISTS=$(aws route53 list-resource-record-sets --hosted-zone-id $ZONE_ID --query "ResourceRecordSets[?Name=='{{ .Values.ingress.host }}.']" --output text)
+          
+          # Create change batch JSON file
+          cat > /tmp/change-batch.json << EOF
+          {
+            "Comment": "Update record for elasticsearch.blizzard.co.il",
+            "Changes": [
+              {
+                "Action": "UPSERT",
+                "ResourceRecordSet": {
+                  "Name": "{{ .Values.ingress.host }}",
+                  "Type": "CNAME",
+                  "TTL": 300,
+                  "ResourceRecords": [
+                    {
+                      "Value": "$ADDRESS"
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+          EOF
+          
+          # Apply the DNS change
+          echo "Updating DNS record to point to $ADDRESS..."
+          aws route53 change-resource-record-sets --hosted-zone-id $ZONE_ID --change-batch file:///tmp/change-batch.json
+          
+          # Check result
+          if [ $? -eq 0 ]; then
+            echo "DNS record successfully updated for {{ .Values.ingress.host }} pointing to $ADDRESS"
+          else
+            echo "Error updating DNS record"
+            exit 1
+          fi
+        env:
+        - name: AWS_REGION
+          value: {{ .Values.ingress.region | default "us-east-1" }}
+      {{- if .Values.ingress.nodeSelector }}
+      nodeSelector:
+        {{- toYaml .Values.ingress.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.ingress.tolerations }}
+      tolerations:
+        {{- toYaml .Values.ingress.tolerations | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}

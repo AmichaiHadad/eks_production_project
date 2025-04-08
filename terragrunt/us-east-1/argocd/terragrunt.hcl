@@ -81,11 +81,13 @@ inputs = {
   namespace               = "argocd"
   argocd_helm_chart_version = "5.51.4"  # Compatible with Argo CD 2.14+
   
+  # Enable ingress with ACM certificate
   ingress_enabled         = true
-  ingress_host            = "argocd.${include.region.locals.subdomain}.${include.region.locals.domain_name}"
+  # Use domain_name from global inputs to construct the ingress hostname
+  ingress_host            = "argocd.${include.region.locals.domain_name}"
   
-  # Use ACM certificate ARN for TLS
-  ingress_tls_secret      = "" # We'll need to create an ACM certificate and put ARN here
+  # Use ACM certificate ARN from region config for TLS
+  ingress_tls_secret      = include.region.locals.acm_certificate_arn
   
   service_type            = "ClusterIP"
   
@@ -97,22 +99,30 @@ inputs = {
   toleration_value        = "true"
   toleration_effect       = "NoSchedule"
   
-  # ApplicationSets configuration
-  application_sets = [
-    {
-      name             = "apps"
-      repo_url         = "https://github.com/your-org/eks-gitops.git" # This will need to be updated
-      path             = "apps"
-      target_revision  = "HEAD"
-      target_namespace = "default"
-      auto_sync        = true
-      self_heal        = true
-    }
-  ]
+  # ApplicationSets disabled until monitoring stack is deployed
+  # Will be re-enabled after Prometheus Operator CRDs are available
+  application_sets = []
+  
+  # Original configuration for reference:
+  # application_sets = [
+  #   {
+  #     name            = "app"
+  #     repo_url        = "https://github.com/AmichaiHadad/eks_app_2.git"
+  #     path            = "helm-chart/app"
+  #     target_revision = "HEAD"
+  #     target_namespace = "default"
+  #     auto_sync       = true
+  #     self_heal       = true
+  #   }
+  # ]
   
   # Common tags
   tags = {
     Region      = include.region.locals.aws_region
     Environment = "production"
   }
+  
+  # DNS configuration - Use variables from region.hcl
+  domain_name = include.region.locals.domain_name
+  dns_managed = true
 }

@@ -12,7 +12,7 @@ locals {
   
   # EKS cluster configuration
   eks_cluster_name    = "eks-blizzard-us-west-2"
-  kubernetes_version  = "1.27"
+  kubernetes_version  = "1.29"
   
   # DNS and domain configuration
   subdomain = "us-west-2"

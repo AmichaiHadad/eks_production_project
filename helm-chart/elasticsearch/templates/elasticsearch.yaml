@@ -1,0 +1,333 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: elasticsearch
+data:
+  elasticsearch.yml: |
+    cluster.name: logging-cluster
+    node.name: ${HOSTNAME}
+    
+    # Paths configuration
+    path.data: /usr/share/elasticsearch/data
+    
+    # Memory settings
+    bootstrap.memory_lock: false
+    node.store.allow_mmap: false
+    
+    # Network settings
+    network.host: 0.0.0.0
+    
+    # Index settings
+    action.auto_create_index: true
+    
+    {{- if eq .Values.discovery "single-node" }}
+    # Use single-node discovery for simpler setup
+    discovery.type: single-node
+    {{- else }}
+    # Cluster settings for multi-node discovery
+    discovery.seed_hosts: ["elasticsearch-headless.{{ .Release.Namespace }}.svc.cluster.local"]
+    cluster.initial_master_nodes: ["elasticsearch-0", "elasticsearch-1", "elasticsearch-2"]
+    {{- end }}
+    
+    # Node roles (all nodes are master-eligible and data nodes)
+    node.roles: ["master", "data"]
+    
+    # Security settings (disabled)
+    xpack.security.enabled: false
+    
+    # Additional settings for multi-node setup
+    network.publish_host: ${HOSTNAME}.elasticsearch-headless.{{ .Release.Namespace }}.svc.cluster.local
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: elasticsearch
+spec:
+  selector:
+    app: elasticsearch
+  ports:
+  - port: 9200
+    name: http
+  - port: 9300
+    name: transport
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: elasticsearch
+spec:
+  selector:
+    app: elasticsearch
+  ports:
+  - port: 9200
+    name: http
+  - port: 9300
+    name: transport
+  clusterIP: None
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: elasticsearch
+spec:
+  serviceName: elasticsearch-headless
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      # Add topology spread constraints for multi-AZ deployment
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: elasticsearch
+      initContainers:
+      - name: fix-permissions
+        image: busybox:1.35.0
+        command: ["sh", "-c", "chown -R 1000:1000 /usr/share/elasticsearch/data"]
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: data
+          mountPath: /usr/share/elasticsearch/data
+      - name: increase-vm-max-map
+        image: busybox:1.35.0
+        command: ["sysctl", "-w", "vm.max_map_count=262144"]
+        securityContext:
+          privileged: true
+      containers:
+      - name: elasticsearch
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        env:
+        - name: ES_JAVA_OPTS
+          value: "-Xms2g -Xmx2g"
+        - name: xpack.security.enabled
+          value: "{{ .Values.security.enabled }}"
+        - name: cluster.name
+          value: "logging-cluster"
+        - name: node.store.allow_mmap
+          value: "false"
+        - name: bootstrap.memory_lock
+          value: "false"
+        # HOSTNAME will be used as node.name via config file
+        securityContext:
+          runAsUser: 1000
+          fsGroup: 1000
+        ports:
+        - containerPort: 9200
+          name: http
+        - containerPort: 9300
+          name: transport
+        volumeMounts:
+        - name: config
+          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+          subPath: elasticsearch.yml
+        - name: data
+          mountPath: /usr/share/elasticsearch/data
+        resources:
+          requests:
+            cpu: {{ .Values.resources.requests.cpu }}
+            memory: {{ .Values.resources.requests.memory }}
+          limits:
+            cpu: {{ .Values.resources.limits.cpu }}
+            memory: {{ .Values.resources.limits.memory }}
+        # No postStart lifecycle hooks - nodes will just start up cleanly
+        readinessProbe:
+          httpGet:
+            path: /_cluster/health?local=true
+            port: 9200
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 5
+        livenessProbe:
+          httpGet:
+            path: /_cluster/health?local=true
+            port: 9200
+          initialDelaySeconds: 120
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 5
+      nodeSelector:
+        {{ toYaml .Values.nodeSelector | nindent 8 }}
+      tolerations:
+        {{ toYaml .Values.tolerations | nindent 6 }}
+      volumes:
+      - name: config
+        configMap:
+          name: elasticsearch-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: {{ .Values.storage.storageClassName | quote }}
+      resources:
+        requests:
+          storage: {{ .Values.storage.size }}
+---
+# Separate Job to set up ILM policies after the cluster is fully up
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: elasticsearch-setup-ilm
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: elasticsearch
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": hook-succeeded
+spec:
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app: elasticsearch-job
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: setup-ilm
+        image: curlimages/curl:7.86.0
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Wait for Elasticsearch to be ready (green or yellow status is acceptable)
+          echo "Waiting for Elasticsearch cluster to be available..."
+          while true; do
+            health_status=$(curl -s http://elasticsearch:9200/_cluster/health | grep -o '"status":"[^"]*"' || echo "")
+            if [[ $health_status =~ "green" || $health_status =~ "yellow" ]]; then
+              echo "Elasticsearch cluster is ready with status: $health_status"
+              break
+            fi
+            echo "Still waiting for Elasticsearch cluster... Current status: $health_status"
+            sleep 10
+          done
+          
+          echo "Elasticsearch is ready. Setting up ILM policy..."
+          
+          # Helper function for curl commands with retry logic
+          function curl_with_retry {
+            local url=$1
+            local method=$2
+            local data=$3
+            local max_retries=5
+            local retry=0
+            local response=""
+            
+            while [ $retry -lt $max_retries ]; do
+              if [ -n "$data" ]; then
+                response=$(curl -s -X $method "$url" -H 'Content-Type: application/json' -d "$data")
+              else
+                response=$(curl -s -X $method "$url")
+              fi
+              
+              if [[ "$response" == *"acknowledged"*"true"* ]]; then
+                echo "Command successful on attempt $((retry+1))"
+                return 0
+              fi
+              
+              retry=$((retry+1))
+              if [ $retry -lt $max_retries ]; then
+                sleep_time=$((retry * 5))
+                echo "Attempt $retry failed, retrying in $sleep_time seconds..."
+                sleep $sleep_time
+              else
+                echo "Failed after $max_retries attempts. Last response: $response"
+                return 1
+              fi
+            done
+          }
+          
+          # Create ILM policy for log rotation
+          echo "Creating ILM policy for log rotation..."
+          ilm_policy='{
+            "policy": {
+              "phases": {
+                "hot": {
+                  "min_age": "0ms",
+                  "actions": {
+                    "rollover": {
+                      "max_age": "7d",
+                      "max_size": "10gb"
+                    },
+                    "set_priority": {
+                      "priority": 100
+                    }
+                  }
+                },
+                "warm": {
+                  "min_age": "30d",
+                  "actions": {
+                    "shrink": {
+                      "number_of_shards": 1
+                    },
+                    "forcemerge": {
+                      "max_num_segments": 1
+                    },
+                    "set_priority": {
+                      "priority": 50
+                    }
+                  }
+                },
+                "delete": {
+                  "min_age": "90d",
+                  "actions": {
+                    "delete": {}
+                  }
+                }
+              }
+            }
+          }'
+          curl_with_retry "elasticsearch:9200/_ilm/policy/logs-policy" "PUT" "$ilm_policy"
+          
+          # Create index template with ILM policy
+          echo "Creating index template with ILM policy..."
+          index_template='{
+            "index_patterns": ["k8s-logs-*"], 
+            "template": {
+              "settings": {
+                "index.lifecycle.name": "logs-policy",
+                "index.lifecycle.rollover_alias": "k8s-logs",
+                "index.number_of_shards": 3,
+                "index.number_of_replicas": 1
+              }
+            }
+          }'
+          curl_with_retry "elasticsearch:9200/_index_template/logs-template" "PUT" "$index_template"
+          
+          # Create initial index and rollover alias
+          echo "Creating initial index and rollover alias..."
+          initial_index='{
+            "aliases": {
+              "k8s-logs": {
+                "is_write_index": true
+              }
+            }
+          }'
+          curl_with_retry "elasticsearch:9200/k8s-logs-000001" "PUT" "$initial_index"
+          
+          echo "ILM policy and index template configured successfully"
+# Ingress removed - Elasticsearch is used internally only per project definition

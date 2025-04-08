@@ -21,5 +21,5 @@ output "mysql_password" {
 
 output "secretstore_name" {
   description = "Name of the SecretStore created by the module"
-  value       = jsondecode(kubectl_manifest.secretstore.yaml_body).metadata.name
+  value       = "aws-secretsmanager"  # Hardcoded from the template
 }

@@ -19,7 +19,7 @@ spec:
     spec:
       project: default
       source:
-        repoURL: https://github.com/yourusername/eks-project-v2.git
+        repoURL: https://github.com/AmichaiHadad/eks_app_2.git
         targetRevision: HEAD
         path: helm-chart/autoscaling
       destination:

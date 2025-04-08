@@ -16,5 +16,5 @@ output "argocd_initial_admin_password" {
 
 output "lb_controller_role_arn" {
   description = "ARN of the IAM role used by the AWS Load Balancer Controller"
-  value       = module.load_balancer_controller_irsa.iam_role_arn
+  value       = aws_iam_role.load_balancer_controller.arn
 }

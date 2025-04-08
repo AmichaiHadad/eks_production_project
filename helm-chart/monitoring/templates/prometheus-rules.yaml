@@ -16,8 +16,8 @@ spec:
       labels:
         severity: warning
       annotations:
-        summary: MySQL high connection count (instance {{ $labels.instance }})
-        description: "MySQL has high number of connections\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+        summary: MySQL high connection count (instance {{ `{{ $labels.instance }}` }})
+        description: "MySQL has high number of connections\n  VALUE = {{ `{{ $value }}` }}\n  LABELS = {{ `{{ $labels }}` }}"
     
     - alert: MySQLTooManyConnections
       expr: mysql_global_status_threads_connected > 200
@@ -25,8 +25,8 @@ spec:
       labels:
         severity: critical
       annotations:
-        summary: MySQL too many connections (instance {{ $labels.instance }})
-        description: "MySQL has too many connections\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+        summary: MySQL too many connections (instance {{ `{{ $labels.instance }}` }})
+        description: "MySQL has too many connections\n  VALUE = {{ `{{ $value }}` }}\n  LABELS = {{ `{{ $labels }}` }}"
   
   - name: elasticsearch.rules
     rules:
@@ -36,8 +36,8 @@ spec:
       labels:
         severity: critical
       annotations:
-        summary: Elasticsearch cluster red (instance {{ $labels.instance }})
-        description: "Elasticsearch cluster is red\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+        summary: Elasticsearch cluster red (instance {{ `{{ $labels.instance }}` }})
+        description: "Elasticsearch cluster is red\n  VALUE = {{ `{{ $value }}` }}\n  LABELS = {{ `{{ $labels }}` }}"
     
     - alert: ElasticsearchClusterYellow
       expr: elasticsearch_cluster_health_status{color="yellow"} == 1
@@ -45,8 +45,8 @@ spec:
       labels:
         severity: warning
       annotations:
-        summary: Elasticsearch cluster yellow (instance {{ $labels.instance }})
-        description: "Elasticsearch cluster is yellow\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+        summary: Elasticsearch cluster yellow (instance {{ `{{ $labels.instance }}` }})
+        description: "Elasticsearch cluster is yellow\n  VALUE = {{ `{{ $value }}` }}\n  LABELS = {{ `{{ $labels }}` }}"
     
     - alert: ElasticsearchHeapTooHigh
       expr: elasticsearch_jvm_heap_used_percent > 85
@@ -54,8 +54,8 @@ spec:
       labels:
         severity: warning
       annotations:
-        summary: Elasticsearch heap too high (instance {{ $labels.instance }})
-        description: "Elasticsearch heap usage is too high\n  VALUE = {{ $value }}%\n  LABELS = {{ $labels }}"
+        summary: Elasticsearch heap too high (instance {{ `{{ $labels.instance }}` }})
+        description: "Elasticsearch heap usage is too high\n  VALUE = {{ `{{ $value }}` }}%\n  LABELS = {{ `{{ $labels }}` }}"
   
   - name: app.rules
     rules:
@@ -65,8 +65,8 @@ spec:
       labels:
         severity: warning
       annotations:
-        summary: Application high error rate (instance {{ $labels.instance }})
-        description: "Application is returning a high number of 5xx errors\n  VALUE = {{ $value }}\n  LABELS = {{ $labels }}"
+        summary: Application high error rate (instance {{ `{{ $labels.instance }}` }})
+        description: "Application is returning a high number of 5xx errors\n  VALUE = {{ `{{ $value }}` }}\n  LABELS = {{ `{{ $labels }}` }}"
     
     - alert: AppHighResponseTime
       expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1
@@ -74,8 +74,8 @@ spec:
       labels:
         severity: warning
       annotations:
-        summary: Application high response time (instance {{ $labels.instance }})
-        description: "Application p95 response time is high\n  VALUE = {{ $value }}s\n  LABELS = {{ $labels }}"
+        summary: Application high response time (instance {{ `{{ $labels.instance }}` }})
+        description: "Application p95 response time is high\n  VALUE = {{ `{{ $value }}` }}s\n  LABELS = {{ `{{ $labels }}` }}"
   
   - name: karpenter.rules
     rules:
@@ -105,8 +105,8 @@ spec:
       labels:
         severity: warning
       annotations:
-        summary: High CPU usage on node (instance {{ $labels.instance }})
-        description: "Node CPU usage is above 80%\n  VALUE = {{ $value }}%\n  LABELS = {{ $labels }}"
+        summary: High CPU usage on node (instance {{ `{{ $labels.instance }}` }})
+        description: "Node CPU usage is above 80%\n  VALUE = {{ `{{ $value }}` }}%\n  LABELS = {{ `{{ $labels }}` }}"
     
     - alert: HighNodeMemory
       expr: instance:node_memory_utilisation:ratio > 0.85
@@ -114,5 +114,5 @@ spec:
       labels:
         severity: warning
       annotations:
-        summary: High memory usage on node (instance {{ $labels.instance }})
-        description: "Node memory usage is above 85%\n  VALUE = {{ $value }}%\n  LABELS = {{ $labels }}"
+        summary: High memory usage on node (instance {{ `{{ $labels.instance }}` }})
+        description: "Node memory usage is above 85%\n  VALUE = {{ `{{ $value }}` }}%\n  LABELS = {{ `{{ $labels }}` }}"

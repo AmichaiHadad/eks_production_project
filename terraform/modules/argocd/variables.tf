@@ -54,7 +54,7 @@ variable "toleration_key" {
 }
 
 variable "toleration_value" {
-  description = "Toleration value for management nodes"
+  description = "Toleration value for management nodes (must be a string)"
   type        = string
   default     = "true"
 }
@@ -94,4 +94,16 @@ variable "tags" {
   description = "A map of tags to add to all resources"
   type        = map(string)
   default     = {}
+}
+
+variable "dns_managed" {
+  description = "Whether to manage DNS records for ArgoCD"
+  type        = bool
+  default     = false
+}
+
+variable "domain_name" {
+  description = "The root domain name for creating ArgoCD DNS records (e.g., example.com)"
+  type        = string
+  default     = ""
 }

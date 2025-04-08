@@ -48,7 +48,7 @@ resource "aws_eks_cluster" "eks_cluster" {
     subnet_ids              = var.subnet_ids
     # Security hardening: Private endpoint access only
     endpoint_private_access = true
-    endpoint_public_access  = false
+    endpoint_public_access  = true
     security_group_ids      = [var.cluster_security_group_id]
   }
 
@@ -126,50 +126,53 @@ resource "aws_iam_openid_connect_provider" "eks_oidc" {
   )
 }
 
-# Install VPC CNI add-on (recommended for latest version)
-resource "aws_eks_addon" "vpc_cni" {
-  cluster_name = aws_eks_cluster.eks_cluster.name
-  addon_name   = "vpc-cni"
-  
-  # Use latest available version compatible with cluster version
-  addon_version = var.vpc_cni_version != "" ? var.vpc_cni_version : null
-  
-  # Resolve conflicts by overwriting
-  resolve_conflicts = "OVERWRITE"
-  
-  depends_on = [
-    aws_eks_cluster.eks_cluster
-  ]
-}
+# Note: Add-ons are commented out here as they require nodes to be available
+# They will be installed separately after node groups are created
 
-# Install CoreDNS add-on
-resource "aws_eks_addon" "coredns" {
-  cluster_name = aws_eks_cluster.eks_cluster.name
-  addon_name   = "coredns"
-  
-  # Use latest available version compatible with cluster version
-  addon_version = var.coredns_version != "" ? var.coredns_version : null
-  
-  # Resolve conflicts by overwriting
-  resolve_conflicts = "OVERWRITE"
-  
-  depends_on = [
-    aws_eks_cluster.eks_cluster
-  ]
-}
-
-# Install kube-proxy add-on
-resource "aws_eks_addon" "kube_proxy" {
-  cluster_name = aws_eks_cluster.eks_cluster.name
-  addon_name   = "kube-proxy"
-  
-  # Use latest available version compatible with cluster version
-  addon_version = var.kube_proxy_version != "" ? var.kube_proxy_version : null
-  
-  # Resolve conflicts by overwriting
-  resolve_conflicts = "OVERWRITE"
-  
-  depends_on = [
-    aws_eks_cluster.eks_cluster
-  ]
-}
+# # Install VPC CNI add-on (recommended for latest version)
+# resource "aws_eks_addon" "vpc_cni" {
+#   cluster_name = aws_eks_cluster.eks_cluster.name
+#   addon_name   = "vpc-cni"
+#   
+#   # Use latest available version compatible with cluster version
+#   addon_version = var.vpc_cni_version != "" ? var.vpc_cni_version : null
+#   
+#   # Resolve conflicts by overwriting
+#   resolve_conflicts = "OVERWRITE"
+#   
+#   depends_on = [
+#     aws_eks_cluster.eks_cluster
+#   ]
+# }
+# 
+# # Install CoreDNS add-on
+# resource "aws_eks_addon" "coredns" {
+#   cluster_name = aws_eks_cluster.eks_cluster.name
+#   addon_name   = "coredns"
+#   
+#   # Use latest available version compatible with cluster version
+#   addon_version = var.coredns_version != "" ? var.coredns_version : null
+#   
+#   # Resolve conflicts by overwriting
+#   resolve_conflicts = "OVERWRITE"
+#   
+#   depends_on = [
+#     aws_eks_cluster.eks_cluster
+#   ]
+# }
+# 
+# # Install kube-proxy add-on
+# resource "aws_eks_addon" "kube_proxy" {
+#   cluster_name = aws_eks_cluster.eks_cluster.name
+#   addon_name   = "kube-proxy"
+#   
+#   # Use latest available version compatible with cluster version
+#   addon_version = var.kube_proxy_version != "" ? var.kube_proxy_version : null
+#   
+#   # Resolve conflicts by overwriting
+#   resolve_conflicts = "OVERWRITE"
+#   
+#   depends_on = [
+#     aws_eks_cluster.eks_cluster
+#   ]
+# }

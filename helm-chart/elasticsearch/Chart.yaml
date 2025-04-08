@@ -1,12 +1,9 @@
 apiVersion: v2
 name: elasticsearch
-description: A Helm chart for Elasticsearch
+description: A custom Helm chart for Elasticsearch using the official image
 type: application
 version: 0.1.0
 appVersion: "8.10.4"
-
-# Using Bitnami Elasticsearch as the upstream dependency
-dependencies:
-  - name: elasticsearch
-    version: "19.13.2"
-    repository: "https://charts.bitnami.com/bitnami"
+annotations:
+  internal-only: "true"
+  notes: "Elasticsearch deployed as internal-only service per project definition. No external ingress."

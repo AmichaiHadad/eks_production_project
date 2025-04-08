@@ -103,11 +103,41 @@ resource "kubectl_manifest" "secretstore" {
   ]
 }
 
+resource "null_resource" "manage_mysql_secret" {
+  # Trigger on any change to the secret name or content
+  triggers = {
+    # The full secret name including the region-specific prefix
+    secret_name = "${var.secret_prefix}/mysql"
+    password = var.generate_random_password ? "random" : var.mysql_password
+    region = var.region
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      # Check if the secret exists (in any state including scheduled for deletion)
+      echo "Checking if MySQL secret exists in region ${var.region}..."
+      if aws secretsmanager describe-secret --secret-id "${var.secret_prefix}/mysql" --region ${var.region} 2>/dev/null; then
+        echo "Secret exists, force deleting..."
+        # Force delete the secret without recovery window
+        aws secretsmanager delete-secret --secret-id "${var.secret_prefix}/mysql" --force-delete-without-recovery --region ${var.region}
+        
+        # Wait a moment for deletion to complete
+        echo "Waiting for deletion to complete..."
+        sleep 5
+      else
+        echo "Secret doesn't exist, proceeding with creation..."
+      fi
+    EOT
+  }
+}
+
 resource "aws_secretsmanager_secret" "mysql" {
   name        = "${var.secret_prefix}/mysql"
   description = "MySQL credentials for EKS application"
   
   tags = var.tags
+  
+  depends_on = [null_resource.manage_mysql_secret]
 }
 
 resource "aws_secretsmanager_secret_version" "mysql" {
@@ -127,17 +157,91 @@ resource "random_password" "mysql" {
   special = false
 }
 
+resource "null_resource" "manage_weather_api_secret" {
+  # Trigger on any change to the secret name or content
+  triggers = {
+    # The full secret name including the region-specific prefix
+    secret_name = "${var.secret_prefix}/weather-api"
+    api_key = var.weather_api_key
+    region = var.region
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      # Check if the secret exists (in any state including scheduled for deletion)
+      echo "Checking if Weather API secret exists in region ${var.region}..."
+      if aws secretsmanager describe-secret --secret-id "${var.secret_prefix}/weather-api" --region ${var.region} 2>/dev/null; then
+        echo "Secret exists, force deleting..."
+        # Force delete the secret without recovery window
+        aws secretsmanager delete-secret --secret-id "${var.secret_prefix}/weather-api" --force-delete-without-recovery --region ${var.region}
+        
+        # Wait a moment for deletion to complete
+        echo "Waiting for deletion to complete..."
+        sleep 5
+      else
+        echo "Secret doesn't exist, proceeding with creation..."
+      fi
+    EOT
+  }
+}
+
 resource "aws_secretsmanager_secret" "weather_api" {
   name        = "${var.secret_prefix}/weather-api"
   description = "Weather API key for EKS application"
   
   tags = var.tags
+  
+  depends_on = [null_resource.manage_weather_api_secret]
 }
 
 resource "aws_secretsmanager_secret_version" "weather_api" {
   secret_id     = aws_secretsmanager_secret.weather_api.id
   secret_string = jsonencode({
     api_key = var.weather_api_key
+  })
+}
+
+resource "null_resource" "manage_slack_webhook_secret" {
+  # Trigger on any change to the secret name or content
+  triggers = {
+    # The full secret name including the region-specific prefix
+    secret_name = "${var.secret_prefix}/slack-webhook"
+    webhook_url = var.slack_webhook_url
+    region = var.region
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      # Check if the secret exists (in any state including scheduled for deletion)
+      echo "Checking if Slack Webhook secret exists in region ${var.region}..."
+      if aws secretsmanager describe-secret --secret-id "${var.secret_prefix}/slack-webhook" --region ${var.region} 2>/dev/null; then
+        echo "Secret exists, force deleting..."
+        # Force delete the secret without recovery window
+        aws secretsmanager delete-secret --secret-id "${var.secret_prefix}/slack-webhook" --force-delete-without-recovery --region ${var.region}
+        
+        # Wait a moment for deletion to complete
+        echo "Waiting for deletion to complete..."
+        sleep 5
+      else
+        echo "Secret doesn't exist, proceeding with creation..."
+      fi
+    EOT
+  }
+}
+
+resource "aws_secretsmanager_secret" "slack_webhook" {
+  name        = "${var.secret_prefix}/slack-webhook"
+  description = "Slack webhook URL for Alertmanager notifications"
+  
+  tags = var.tags
+  
+  depends_on = [null_resource.manage_slack_webhook_secret]
+}
+
+resource "aws_secretsmanager_secret_version" "slack_webhook" {
+  secret_id     = aws_secretsmanager_secret.slack_webhook.id
+  secret_string = jsonencode({
+    webhookUrl = var.slack_webhook_url
   })
 }
 
@@ -164,5 +268,18 @@ resource "kubectl_manifest" "weather_api_external_secret" {
   depends_on = [
     kubectl_manifest.secretstore,
     aws_secretsmanager_secret_version.weather_api
+  ]
+}
+
+resource "kubectl_manifest" "slack_webhook_external_secret" {
+  yaml_body = templatefile("${path.module}/templates/externalsecret-slack.yaml", {
+    name        = "slack-webhook-secret"
+    namespace   = "monitoring"
+    secret_name = aws_secretsmanager_secret.slack_webhook.name
+  })
+
+  depends_on = [
+    kubectl_manifest.secretstore,
+    aws_secretsmanager_secret_version.slack_webhook
   ]
 }

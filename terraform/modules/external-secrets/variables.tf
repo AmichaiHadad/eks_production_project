@@ -60,6 +60,13 @@ variable "weather_api_key" {
   sensitive   = true
 }
 
+variable "slack_webhook_url" {
+  description = "Slack webhook URL for Alertmanager notifications"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
 variable "tags" {
   description = "A map of tags to add to all resources"
   type        = map(string)

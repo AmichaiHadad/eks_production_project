@@ -15,11 +15,13 @@ affinity:
           operator: In
           values:
           - management
-  tolerations:
-  - key: "management"
-    operator: "Equal"
-    value: "true"
-    effect: "NoSchedule"
+
+# Add tolerations for management nodes
+tolerations:
+- key: "management"
+  operator: "Equal"
+  value: "true"
+  effect: "NoSchedule"
 
 # Container resources
 resources:

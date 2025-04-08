@@ -9,11 +9,11 @@ remote_state {
     if_exists = "overwrite_terragrunt"
   }
   config = {
-    bucket         = "${local.aws_region}-${local.project_name}-terraform-state"
+    bucket         = "eks-blizzard-terragrunt-state"
     key            = "${path_relative_to_include()}/terraform.tfstate"
-    region         = local.aws_region
+    region         = "us-east-1"
     encrypt        = true
-    dynamodb_table = "${local.aws_region}-${local.project_name}-terraform-locks"
+    dynamodb_table = "eks-blizzard-terragrunt-locks"
   }
 }
 

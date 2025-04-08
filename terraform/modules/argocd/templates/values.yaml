@@ -2,6 +2,10 @@
 
 ## Server configurations
 server:
+  # Run ArgoCD server in insecure mode to prevent redirect loops
+  extraArgs:
+    - --insecure
+
   # Server service type
   service:
     type: ${service_type}
@@ -11,46 +15,46 @@ server:
     enabled: ${ingress_enabled}
     hosts:
       - ${ingress_host}
-    %{if ingress_tls_secret != ""}
-    tls:
-      - secretName: ${ingress_tls_secret}
-        hosts:
-          - ${ingress_host}
-    %{endif}
+    # For ALB with ACM, we configure it to support both HTTP and HTTPS traffic
+    # with SSL termination at the ALB to avoid redirect loops
     annotations:
       kubernetes.io/ingress.class: alb
       alb.ingress.kubernetes.io/scheme: internet-facing
       alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/group.name: "argocd"
       %{if ingress_tls_secret != ""}
       alb.ingress.kubernetes.io/certificate-arn: ${ingress_tls_secret}
-      alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS":443}]'
-      alb.ingress.kubernetes.io/ssl-redirect: "443"
+      # Allow both HTTP and HTTPS to prevent ArgoCD redirect loops
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
       %{endif}
 
   # Schedule on management nodes
   nodeSelector: ${node_selector}
   tolerations:
-    - key: ${toleration_key}
-      value: ${toleration_value}
-      effect: ${toleration_effect}
+    - key: "${toleration_key}"
+      value: "${toleration_value}"
+      effect: "${toleration_effect}"
+      operator: "Equal"
 
 ## Controller configurations
 controller:
   # Schedule on management nodes
   nodeSelector: ${node_selector}
   tolerations:
-    - key: ${toleration_key}
-      value: ${toleration_value}
-      effect: ${toleration_effect}
+    - key: "${toleration_key}"
+      value: "${toleration_value}"
+      effect: "${toleration_effect}"
+      operator: "Equal"
 
 ## Repo server configurations  
 repoServer:
   # Schedule on management nodes
   nodeSelector: ${node_selector}
   tolerations:
-    - key: ${toleration_key}
-      value: ${toleration_value}
-      effect: ${toleration_effect}
+    - key: "${toleration_key}"
+      value: "${toleration_value}"
+      effect: "${toleration_effect}"
+      operator: "Equal"
 
 ## ApplicationSet controller
 applicationSet:
@@ -58,18 +62,20 @@ applicationSet:
   # Schedule on management nodes
   nodeSelector: ${node_selector}
   tolerations:
-    - key: ${toleration_key}
-      value: ${toleration_value}
-      effect: ${toleration_effect}
+    - key: "${toleration_key}"
+      value: "${toleration_value}"
+      effect: "${toleration_effect}"
+      operator: "Equal"
 
 ## Redis configurations
 redis:
   # Schedule on management nodes
   nodeSelector: ${node_selector}
   tolerations:
-    - key: ${toleration_key}
-      value: ${toleration_value}
-      effect: ${toleration_effect}
+    - key: "${toleration_key}"
+      value: "${toleration_value}"
+      effect: "${toleration_effect}"
+      operator: "Equal"
 
 ## Dex (OIDC provider)
 dex:
@@ -101,7 +107,7 @@ configManagementPlugins: |
 configs:
   # Automatically sync when application is created
   params:
-    server.insecure: false
+    server.insecure: true  # Enable insecure mode to prevent redirect loops
     application.instanceLabelKey: argocd.argoproj.io/instance
 
   # Resource customizations

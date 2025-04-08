@@ -1,107 +1,51 @@
-# Elasticsearch Helm chart values
-elasticsearch:
-  # Global settings
-  global:
-    kibanaEnabled: false
+# Custom Elasticsearch chart values
+# Using official Elasticsearch image directly instead of Bitnami chart
+
+# No need for complex security configuration - using simple deployment with security disabled
+# as specified in Project_Master_Definition.md and implemented in templates/elasticsearch.yaml
+
+# Default to 3-Node cluster configuration for high availability
+# Each node has both master and data roles as per Project_Master_Definition.md
+# Can be overridden to 1 for simpler deployment
+replicas: 3
+# Discovery mode - can be set to "single-node" for simpler deployment
+discovery: "multi-node"
+image:
+  repository: docker.elastic.co/elasticsearch/elasticsearch
+  tag: 8.10.4
+
+# Resource configuration for ES nodes
+resources:
+  requests:
+    cpu: 500m
+    memory: 3Gi
+  limits:
+    cpu: 1
+    memory: 4Gi
+
+# Storage configuration
+storage:
+  storageClassName: gp2
+  size: 30Gi
+
+# Security settings - disabled as per solution in ClaudeProgress.md
+security:
+  enabled: false
+
+# Node placement
+nodeSelector:
+  node-role: data
+tolerations:
+  - effect: NoSchedule
+    key: role
+    value: data
+
+# Ingress configuration - DISABLED per project definition
+# Elasticsearch should only be accessible internally
+ingress:
+  enabled: false
   
-  # Cluster configuration
-  clusterName: "logging-cluster"
-  
-  # Security
-  security:
-    enabled: true
-    # These will be overridden by External Secrets in production
-    elasticPassword: "placeholder-elastic-password"
-    
-  # Node configuration for master-eligible nodes
-  master:
-    replicas: 3
-    # Schedule on data nodes
-    nodeSelector:
-      node-role: data
-    tolerations:
-      - key: role
-        value: data
-        effect: NoSchedule
-    heapSize: 1024m
-    resources:
-      requests:
-        cpu: 500m
-        memory: 2Gi
-      limits:
-        cpu: 1000m
-        memory: 2Gi
-    persistence:
-      enabled: true
-      storageClass: "gp3"
-      size: 30Gi
-  
-  # Node configuration for data nodes (we use master-eligible data nodes for simplicity)
-  data:
-    replicas: 0  # We're using master nodes as data nodes too for simplicity
-  
-  # Node configuration for coordinating-only nodes
-  coordinating:
-    replicas: 0  # Not using dedicated coordinating nodes
-  
-  # Node configuration for ingest nodes
-  ingest:
-    replicas: 0  # Not using dedicated ingest nodes
-  
-  # Service configuration
-  service:
-    type: ClusterIP
-    ports:
-      restAPI: 9200
-      transport: 9300
-  
-  # Initialize with default index templates
-  plugins: []  # No additional plugins
-  
-  # Configure index lifecycle management policies
-  sysctlImage:
-    enabled: true
-  
-  # Set JVM options for better performance in Kubernetes
-  extraEnvVars:
-    - name: ES_JAVA_OPTS
-      value: "-Xms1g -Xmx1g"
-    
-  # Configure log levels
-  logging:
-    level: info
-  
-  # Enable hot/warm architecture
-  hotWarmArchitecture:
-    enabled: false  # For simplicity, we're not using hot/warm architecture
-  
-  # Snapshots and backups
-  snapshotRepository:
-    enabled: false  # Configure for production to backup to S3
-  
-  # Default curator settings for index cleanup
-  curator:
-    enabled: false  # Will be set up separately with Elasticsearch curator cronjob
-  
-  # Use pre-existing secrets
-  existingSecret: ""  # Will be set in production using External Secrets
-  
-  # Configure default index templates
-  extraConfig:
-    elasticsearch.yml: |
-      # Custom Elasticsearch configuration
-      action.auto_create_index: true
-      # Default ILM policy to retain logs for 7 days
-      xpack.ilm.policies:
-        logs-policy:
-          phases:
-            hot:
-              min_age: 0ms
-              actions:
-                rollover:
-                  max_age: 1d
-                  max_size: 5gb
-            delete:
-              min_age: 7d
-              actions:
-                delete: {}
+# Service configuration - Use ClusterIP for internal access only
+service:
+  type: ClusterIP
+  port: 9200

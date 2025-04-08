@@ -48,17 +48,18 @@ output "encryption_key_arn" {
   value       = aws_kms_key.eks_encryption_key.arn
 }
 
+# Addon outputs are now handled by the eks-addons module
 output "vpc_cni_addon_id" {
-  description = "ID of the VPC CNI add-on"
-  value       = aws_eks_addon.vpc_cni.id
+  description = "ID of the VPC CNI add-on (now moved to eks-addons module)"
+  value       = null
 }
 
 output "coredns_addon_id" {
-  description = "ID of the CoreDNS add-on"
-  value       = aws_eks_addon.coredns.id
+  description = "ID of the CoreDNS add-on (now moved to eks-addons module)"
+  value       = null
 }
 
 output "kube_proxy_addon_id" {
-  description = "ID of the kube-proxy add-on"
-  value       = aws_eks_addon.kube_proxy.id
+  description = "ID of the kube-proxy add-on (now moved to eks-addons module)"
+  value       = null
 }

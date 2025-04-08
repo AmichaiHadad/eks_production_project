@@ -325,6 +325,24 @@ terragrunt plan
 terragrunt apply -auto-approve
 ```
 
+### Deploy EKS Addons
+
+Deploy the EKS addons after the node groups are available:
+
+```bash
+# Deploy us-east-1 EKS addons
+cd ../../us-east-1/eks-addons
+terragrunt init
+terragrunt plan
+terragrunt apply -auto-approve
+
+# Deploy us-west-2 EKS addons
+cd ../../us-west-2/eks-addons
+terragrunt init
+terragrunt plan
+terragrunt apply -auto-approve
+```
+
 ### Configure kubectl
 
 Set up kubectl to access the clusters:
@@ -390,12 +408,19 @@ aws secretsmanager create-secret \
     --secret-string "{\"api_key\":\"$WEATHER_API_KEY\"}" \
     --region us-east-1
 
+# if you already have the secret created you can delete it by: 
+aws secretsmanager delete-secret --secret-id eks-blizzard-us-east-1/weather-api --force-delete-without-recovery --region us-east-1
+
 # Create Weather API secret in us-west-2
 aws secretsmanager create-secret \
     --name eks-blizzard-us-west-2/weather-api \
     --description "Weather API key for EKS application" \
     --secret-string "{\"api_key\":\"$WEATHER_API_KEY\"}" \
     --region us-west-2 --profile us-west-2
+
+# if you already have the secret created you can delete it by: 
+aws secretsmanager delete-secret --secret-id eks-blizzard-us-east-1/weather-api --force-delete-without-recovery --region us-west-2
+
 ```
 
 ### Build and Push the Application Image
@@ -495,7 +520,46 @@ kubectl wait --for=condition=Synced applications -n argocd --all --timeout=5m
 
 ### Deploy Monitoring Stack
 
-Deploy Prometheus, Grafana, and Alertmanager using Argo CD:
+First, create the required secrets for Alertmanager and Grafana:
+
+```bash
+# Generate a secure random password for Grafana
+GRAFANA_PASSWORD=$(openssl rand -base64 16)
+echo "Generated Grafana password: $GRAFANA_PASSWORD"
+echo "Save this password somewhere secure!"
+
+# Create secrets in us-east-1
+kubectl config use-context us-east-1
+kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+# Create the Slack webhook secret for Alertmanager
+kubectl create secret generic alertmanager-slack-webhook \
+  -n monitoring \
+  --from-literal=slack_webhook_url="https://hooks.slack.com/services/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"
+
+# Create a temporary secret with our desired password
+kubectl create secret generic grafana-admin-credentials \
+  -n monitoring \
+  --from-literal=admin-user="admin" \
+  --from-literal=admin-password="$GRAFANA_PASSWORD"
+
+# Do the same for us-west-2
+kubectl config use-context us-west-2
+kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+# Create the Slack webhook secret for Alertmanager
+kubectl create secret generic alertmanager-slack-webhook \
+  -n monitoring \
+  --from-literal=slack_webhook_url="https://hooks.slack.com/services/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"
+
+# Create a temporary secret with our desired password
+kubectl create secret generic grafana-admin-credentials \
+  -n monitoring \
+  --from-literal=admin-user="admin" \
+  --from-literal=admin-password="$GRAFANA_PASSWORD"
+```
+
+Then deploy Prometheus, Grafana, and Alertmanager using Argo CD:
 
 ```bash
 # Apply the Argo CD Application manifests for monitoring
@@ -508,29 +572,67 @@ kubectl get applications -n argocd
 # Wait for the applications to sync
 kubectl wait --for=condition=Synced applications -n argocd --all --timeout=5m
 
+# Wait for Grafana pod to be ready
+echo "Waiting for Grafana pod to be ready..."
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n monitoring --timeout=180s
+
+# Get Grafana pod name
+GRAFANA_POD=$(kubectl get pods -n monitoring -l app.kubernetes.io/name=grafana -o jsonpath='{.items[0].metadata.name}')
+echo "Resetting Grafana admin password to a secure value..."
+
+# Use a secure password (you can change this to your preferred password)
+SECURE_PASSWORD="$GRAFANA_PASSWORD"  # Use the previously generated password
+
+# Reset the Grafana admin password using Grafana CLI
+kubectl exec -n monitoring $GRAFANA_POD -- grafana-cli admin reset-admin-password "$SECURE_PASSWORD"
+
+echo "Grafana admin password has been set to your secure password."
+echo "Make sure to save this password: $SECURE_PASSWORD"
+
 # Do the same for us-west-2
 kubectl config use-context us-west-2
 kubectl apply -f ../../argocd/monitoring-applicationset.yaml
 kubectl wait --for=condition=Synced applications -n argocd --all --timeout=5m
+
+# Wait for Grafana pod to be ready
+echo "Waiting for Grafana pod to be ready..."
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n monitoring --timeout=180s
+
+# Get Grafana pod name
+GRAFANA_POD=$(kubectl get pods -n monitoring -l app.kubernetes.io/name=grafana -o jsonpath='{.items[0].metadata.name}')
+echo "Resetting Grafana admin password to a secure value..."
+
+# Use a secure password (you can change this to your preferred password)
+# Use the same password for consistency across regions
+SECURE_PASSWORD="$GRAFANA_PASSWORD"
+
+# Reset the Grafana admin password using Grafana CLI
+kubectl exec -n monitoring $GRAFANA_POD -- grafana-cli admin reset-admin-password "$SECURE_PASSWORD"
+
+echo "Grafana admin password has been set to your secure password."
 ```
 
 ### Access Grafana
 
-Get the Grafana admin password and URL:
+Access Grafana using the credentials you created earlier:
 
 ```bash
 # us-east-1
 kubectl config use-context us-east-1
-kubectl get secret -n monitoring grafana -o jsonpath="{.data.admin-password}" | base64 -d
-echo
-kubectl get ingress -n monitoring grafana
+echo "Grafana Username: admin"
+echo "Grafana Password: $SECURE_PASSWORD"  # The secure password you set
+
+# Get Grafana URL
+kubectl get ingress -n monitoring -l app.kubernetes.io/name=grafana
 
 # us-west-2
 kubectl config use-context us-west-2
-kubectl get secret -n monitoring grafana -o jsonpath="{.data.admin-password}" | base64 -d
-echo
-kubectl get ingress -n monitoring grafana
+echo "Grafana Username: admin"
+echo "Grafana Password: $SECURE_PASSWORD"  # The same secure password
+kubectl get ingress -n monitoring -l app.kubernetes.io/name=grafana
 ```
+
+Grafana should be accessible at the URL provided in the ingress (e.g., http://grafana.blizzard.co.il).
 
 ## Autoscaling Configuration
 

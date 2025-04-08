@@ -27,14 +27,14 @@ dependency "vpc" {
 
 # Inputs to the EKS cluster module
 inputs = {
-  cluster_name            = include.region.locals.eks_cluster_name
+  cluster_name            = include.region.locals.cluster_name
   kubernetes_version      = include.region.locals.kubernetes_version
   subnet_ids              = dependency.vpc.outputs.private_subnets
   cluster_security_group_id = dependency.vpc.outputs.cluster_security_group_id
   
   # Common tags
   tags = {
-    Name        = include.region.locals.eks_cluster_name
+    Name        = include.region.locals.cluster_name
     Region      = include.region.locals.aws_region
     Environment = "production"
   }
