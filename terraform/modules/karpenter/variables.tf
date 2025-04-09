@@ -28,6 +28,11 @@ variable "node_iam_role_arn" {
   type        = string
 }
 
+variable "node_role_name" {
+  description = "Name of the IAM role for the EKS node group that Karpenter will manage"
+  type        = string
+}
+
 variable "private_subnet_ids" {
   description = "List of private subnet IDs for node placement"
   type        = list(string)

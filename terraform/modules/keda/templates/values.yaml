@@ -26,11 +26,13 @@ affinity:
           operator: In
           values:
           - management
-  tolerations:
-  - key: "management"
-    operator: "Equal"
-    value: "true"
-    effect: "NoSchedule"
+
+# Tolerations should be at the same level as affinity
+tolerations:
+- key: "management"
+  operator: "Equal"
+  value: "true"
+  effect: "NoSchedule"
 
 metricsServer:
   rbac:
@@ -40,4 +42,4 @@ prometheus:
   metricServer:
     enabled: true
     podMonitor:
-      enabled: true
+      enabled: false

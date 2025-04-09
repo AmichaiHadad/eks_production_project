@@ -109,20 +109,31 @@ resource "helm_release" "karpenter" {
   }
 
   depends_on = [
-    aws_iam_role_policy_attachment.karpenter_controller
+    aws_iam_role_policy_attachment.karpenter_controller,
+    helm_release.karpenter
+  ]
+}
+
+resource "time_sleep" "wait_for_karpenter_crds" {
+  create_duration = "30s" # Wait 30 seconds after Helm release
+
+  depends_on = [
+    helm_release.karpenter
   ]
 }
 
 resource "kubectl_manifest" "karpenter_provisioner" {
-  yaml_body = templatefile("${path.module}/templates/provisioner.yaml", {
+  yaml_body = templatefile("${path.module}/templates/nodepool.yaml", {
     cluster_name    = var.cluster_name
     cluster_endpoint = var.cluster_endpoint
     subnet_ids      = join(",", var.private_subnet_ids)
     security_groups = join(",", var.security_group_ids)
     region          = var.region
+    node_role_name = var.node_role_name
   })
 
   depends_on = [
-    helm_release.karpenter
+    helm_release.karpenter,
+    time_sleep.wait_for_karpenter_crds
   ]
 }

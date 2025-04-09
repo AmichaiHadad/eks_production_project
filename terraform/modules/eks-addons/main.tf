@@ -236,3 +236,94 @@ resource "aws_iam_role_policy_attachment" "route53_dns_manager" {
     aws_iam_role.route53_dns_manager
   ]
 }
+
+# Deploy ExternalDNS using Helm chart
+resource "helm_release" "external_dns" {
+  count = var.create_route53_dns_manager_irsa ? 1 : 0 # Only deploy if IRSA role is created
+
+  name       = "external-dns"
+  repository = "https://kubernetes-sigs.github.io/external-dns/"
+  chart      = "external-dns"
+  version    = var.external_dns_chart_version
+  namespace  = var.route53_dns_manager_namespace # Deploy into the namespace specified for the SA (e.g., monitoring)
+  create_namespace = true # Create the namespace if it doesn't exist
+
+  # Use values block with YAML heredoc for better structure and type handling
+  values = [
+    <<-EOT
+    serviceAccount:
+      create: true
+      name: ${var.route53_dns_manager_service_account}
+      annotations:
+        eks.amazonaws.com/role-arn: ${aws_iam_role.route53_dns_manager[0].arn}
+    
+    # Set log level directly
+    logLevel: debug
+
+    domainFilters:
+      - ${var.external_dns_domain_filter}
+      
+    txtOwnerId: ${var.external_dns_txt_owner_id != "" ? var.external_dns_txt_owner_id : var.cluster_name}
+    
+    policy: sync # Sync DNS records with resources
+    
+    provider: aws
+    
+    aws:
+      zoneType: public # Explicitly set zone type
+      
+    # Schedule on monitoring nodes (or management, adjust if needed)
+    nodeSelector:
+      node-role: monitoring
+      
+    tolerations:
+    - key: "monitoring"
+      value: "true"
+      effect: "NoSchedule"
+      operator: "Equal" # Ensure operator is specified
+      
+    # Add resource requests/limits if needed
+    # resources:
+    #   requests:
+    #     cpu: 100m
+    #     memory: 128Mi
+    #   limits:
+    #     cpu: 200m
+    #     memory: 256Mi
+        
+    # Disable Helm chart's RBAC creation
+    rbac:
+      create: false
+    EOT
+  ]
+
+  depends_on = [
+    aws_iam_role_policy_attachment.route53_dns_manager
+  ]
+}
+
+# Explicitly create the ClusterRoleBinding using Terraform
+resource "kubernetes_cluster_role_binding" "external_dns_binding" {
+  count = var.create_route53_dns_manager_irsa ? 1 : 0
+
+  metadata {
+    name = "external-dns-tf-binding" # Use a distinct name
+  }
+
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "ClusterRole"
+    # Use the standard name Helm chart creates, or define the ClusterRole explicitly here too
+    name      = "external-dns"
+  }
+
+  subject {
+    kind      = "ServiceAccount"
+    name      = var.route53_dns_manager_service_account # This is the 'external-dns' SA name
+    namespace = var.route53_dns_manager_namespace   # Namespace 'monitoring'
+  }
+
+  depends_on = [
+    helm_release.external_dns # Ensure Helm release runs first to create the SA and Role
+  ]
+}

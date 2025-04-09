@@ -11,7 +11,10 @@ spec:
   - Egress
   egress:
   - to:
-    - podSelector:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: data
+      podSelector:
         matchLabels:
           app: mysql
     ports:

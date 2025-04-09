@@ -5,8 +5,10 @@ dashboard:
     type: ClusterIP
   
 webhook:
-  enable: true
+  enable: false
   mutate: false
+  certManager:
+    enabled: false # Disable cert-manager integration
   
   nodeSelector:
     node-role: management
@@ -26,10 +28,8 @@ webhook:
       memory: 512Mi
 
 audit:
-  enable: true
+  enable: false
   schedule: "0 */12 * * *"  # Twice daily
-  
-  outputURL: ""
   
   resources:
     requests:

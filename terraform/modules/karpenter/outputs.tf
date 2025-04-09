@@ -8,7 +8,7 @@ output "karpenter_controller_role_name" {
   value       = aws_iam_role.karpenter_controller.name
 }
 
-output "karpenter_provisioner_name" {
+output "karpenter_nodepool_name" {
   description = "Name of the Karpenter provisioner"
-  value       = jsondecode(kubectl_manifest.karpenter_provisioner.yaml_body).metadata.name
+  value       = "default"
 }

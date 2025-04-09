@@ -57,3 +57,8 @@ output "route53_dns_manager_policy_arn" {
   description = "ARN of the IAM policy for Route53 DNS Manager"
   value       = var.create_route53_dns_manager_irsa ? aws_iam_policy.route53_dns_manager[0].arn : null
 }
+
+output "external_dns_helm_release_status" {
+  description = "Status of the ExternalDNS Helm release"
+  value       = var.create_route53_dns_manager_irsa ? helm_release.external_dns[0].status : "disabled"
+}

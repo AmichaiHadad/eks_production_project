@@ -42,10 +42,9 @@ ingress:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
-    # ACM certificate ARN will be added here
-    # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...
+  acmCertificateArn: ""
   hosts:
-    - host: app.blizzard.co.il
+    - host: app.blizzard.co.il # This will be overridden by the ApplicationSet parameter
       paths:
         - path: /
           pathType: Prefix

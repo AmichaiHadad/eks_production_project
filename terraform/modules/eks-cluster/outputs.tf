@@ -43,6 +43,11 @@ output "cluster_iam_role_name" {
   value       = aws_iam_role.eks_cluster_role.name
 }
 
+output "cluster_arn" {
+  description = "ARN of the EKS cluster"
+  value       = aws_eks_cluster.eks_cluster.arn
+}
+
 output "encryption_key_arn" {
   description = "ARN of the KMS key used for EKS cluster encryption"
   value       = aws_kms_key.eks_encryption_key.arn

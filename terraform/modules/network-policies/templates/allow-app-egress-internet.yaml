@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-egress-internet
+  namespace: default # Assuming app runs in default namespace
+spec:
+  podSelector:
+    matchLabels:
+      app: app
+  policyTypes:
+  - Egress
+  egress:
+  # Allow traffic to the internet for Weather API
+  - to:
+    - ipBlock:
+        # Allows all IPs - tighten if possible
+        cidr: 0.0.0.0/0
+        except:
+          # Deny traffic to cluster-internal CIDRs to prevent bypass
+          - 10.0.0.0/8
+          - 172.16.0.0/12
+          - 192.168.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443 

@@ -67,3 +67,21 @@ variable "route53_dns_manager_service_account" {
   type        = string
   default     = "route53-dns-manager"
 }
+
+variable "external_dns_chart_version" {
+  description = "Version of the ExternalDNS Helm chart"
+  type        = string
+  default     = "1.14.5" # Check for latest compatible version
+}
+
+variable "external_dns_domain_filter" {
+  description = "Domain filter for ExternalDNS (e.g., blizzard.co.il)"
+  type        = string
+  default     = ""
+}
+
+variable "external_dns_txt_owner_id" {
+  description = "TXT record owner ID for ExternalDNS"
+  type        = string
+  default     = ""
+}

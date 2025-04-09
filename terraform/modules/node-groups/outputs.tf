@@ -47,3 +47,8 @@ output "data_node_role_arn" {
   description = "ARN of the data node IAM role"
   value       = aws_iam_role.eks_data_node_role.arn
 }
+
+output "node_role_name" {
+  description = "Name of the common node IAM role"
+  value       = aws_iam_role.eks_node_role.name
+}

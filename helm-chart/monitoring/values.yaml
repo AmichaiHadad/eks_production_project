@@ -18,21 +18,57 @@ kube-prometheus-stack:
     rbac:
       create: true
       
-  # Add Elasticsearch as additional datasource to kube-prometheus-stack Grafana
+  # Grafana configuration (Consolidated)
   grafana:
+    enabled: true
+    nodeSelector:
+      node-role: monitoring
+    tolerations:
+      - key: monitoring
+        value: "true"
+        effect: NoSchedule
+    # Instead of using adminPassword directly, use an existing secret
+    admin:
+      existingSecret: "grafana-admin-credentials"
+      userKey: "admin-user"
+      passwordKey: "admin-password"
+    persistence:
+      enabled: true
+      storageClassName: gp2
+      size: 10Gi
+    ingress:
+      enabled: true
+      ingressClassName: alb
+      annotations:
+        kubernetes.io/ingress.class: alb
+        alb.ingress.kubernetes.io/scheme: internet-facing
+        alb.ingress.kubernetes.io/target-type: ip
+        alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+        alb.ingress.kubernetes.io/ssl-redirect: "443"
+        alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:163459217187:certificate/4ff90f30-64f8-40e1-b1b3-8f13d5fac876
+        external-dns.alpha.kubernetes.io/hostname: grafana-{{ .Values.global.region }}.blizzard.co.il
+        external-dns.alpha.kubernetes.io/ttl: "300"
+    sidecar:
+      dashboards:
+        enabled: true
+        searchNamespace: ALL
+    # Add Elasticsearch as additional datasource
     additionalDataSources:
       - name: Elasticsearch
         type: elasticsearch
-        url: http://elasticsearch-master:9200
+        url: http://elasticsearch.data.svc.cluster.local:9200
         access: proxy
         database: k8s-logs-*
         isDefault: false
         jsonData:
           timeField: "@timestamp"
-          esVersion: 70
+          esVersion: 8
           logLevelField: level
           logMessageField: log
-    
+    # Disable pre-installed dashboards to avoid label issues
+    # We'll use custom dashboards via ConfigMaps instead
+    dashboards: {}
+  
   # Prometheus Operator configuration
   prometheusOperator:
     enabled: true
@@ -171,85 +207,6 @@ kube-prometheus-stack:
               requests:
                 storage: 10Gi
   
-  # Grafana configuration
-  grafana:
-    enabled: true
-    nodeSelector:
-      node-role: monitoring
-    tolerations:
-      - key: monitoring
-        value: "true"
-        effect: NoSchedule
-    # Instead of using adminPassword directly, use an existing secret
-    admin:
-      existingSecret: "grafana-admin-credentials"
-      userKey: "admin-user"
-      passwordKey: "admin-password"
-    persistence:
-      enabled: true
-      storageClassName: gp2
-      size: 10Gi
-    ingress:
-      enabled: true
-      ingressClassName: alb
-      annotations:
-        kubernetes.io/ingress.class: alb
-        alb.ingress.kubernetes.io/scheme: internet-facing
-        alb.ingress.kubernetes.io/target-type: ip
-        alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-        alb.ingress.kubernetes.io/ssl-redirect: "443"
-        # External DNS annotation to automatically create DNS record
-        external-dns.alpha.kubernetes.io/hostname: grafana.blizzard.co.il
-        external-dns.alpha.kubernetes.io/ttl: "300"
-        # ACM certificate ARN will be added here
-        # alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:...
-      hosts:
-        - grafana.blizzard.co.il
-    sidecar:
-      dashboards:
-        enabled: true
-        searchNamespace: ALL
-    # We are now managing datasources through kube-prometheus-stack.grafana.additionalDataSources
-    # to avoid the duplicate datasource issue that causes Grafana to crash
-    # datasources:
-    #   datasources.yaml:
-    #     apiVersion: 1
-    #     datasources:
-    #     - name: Prometheus
-    #       type: prometheus
-    #       url: http://prometheus-operated:9090
-    #       access: proxy
-    #       isDefault: true
-    #     - name: Elasticsearch
-    #       type: elasticsearch
-    #       url: http://elasticsearch-master:9200
-    #       access: proxy
-    #       database: k8s-logs-*
-    #       isDefault: false
-    #       jsonData:
-    #         timeField: "@timestamp"
-    #         esVersion: 70
-    #         logLevelField: level
-    #         logMessageField: log
-  
-    # Dashboards configuration
-    dashboardProviders:
-      dashboardproviders.yaml:
-        apiVersion: 1
-        providers:
-        - name: 'default'
-          orgId: 1
-          folder: ''
-          type: file
-          disableDeletion: false
-          editable: true
-          options:
-            path: /var/lib/grafana/dashboards/default
-    
-    # Disable pre-installed dashboards to avoid label issues
-    # We'll use custom dashboards via ConfigMaps instead
-    dashboards: {}
-  
   # Kube state metrics
   kubeStateMetrics:
     enabled: true
@@ -295,6 +252,11 @@ kube-prometheus-stack:
       prometheus: true
       time: true
 
+# Disable ExternalDNS creation from this chart (should be managed by Terraform)
+# Assuming externalDns might be a subchart or option
+externalDns:
+  enabled: false
+
 # MySQL exporter
 prometheus-mysql-exporter:
   mysql:
@@ -326,7 +288,7 @@ prometheus-mysql-exporter:
 # Elasticsearch exporter
 prometheus-elasticsearch-exporter:
   es:
-    uri: http://elasticsearch-master:9200
+    uri: http://elasticsearch.data.svc.cluster.local:9200
     all: true
     indices: true
     indices_settings: true

@@ -69,18 +69,14 @@ inputs = {
   oidc_provider    = dependency.eks.outputs.oidc_provider_url
   oidc_provider_arn = dependency.eks.outputs.oidc_provider_arn
   
-  # Customize these values as needed
   secret_prefix    = "eks-blizzard-${local.region}"
   parameter_prefix = "eks-blizzard/${local.region}"
   chart_version    = "0.9.9"
   
-  # In a real scenario, these would be securely passed via environment variables
-  # or another secure method, not hardcoded
-  generate_random_password = true
-  weather_api_key = "placeholder-api-key"
+  generate_random_password = false
+  mysql_password = "placeholder-app-password"
   
-  # Slack webhook URL for Alertmanager notifications
-  # This should be replaced with the actual Slack webhook URL provided by the user
+  weather_api_key = "placeholder-api-key"
   slack_webhook_url = "REPLACE_WITH_ACTUAL_SLACK_WEBHOOK_URL"
   
   tags = {

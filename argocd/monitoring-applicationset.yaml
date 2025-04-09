@@ -24,14 +24,34 @@ spec:
           valueFiles:
             - values.yaml
           parameters:
-            - name: grafana.ingress.hosts[0]
-              value: 'grafana.blizzard.co.il'
+            - name: grafana.ingress.annotations."kubernetes\.io/ingress\.class"
+              value: alb
+            - name: grafana.ingress.annotations."alb\.ingress\.kubernetes\.io/scheme"
+              value: internet-facing
+            - name: grafana.ingress.annotations."alb\.ingress\.kubernetes\.io/target-type"
+              value: ip
+            - name: grafana.ingress.annotations."alb\.ingress\.kubernetes\.io/listen-ports"
+              value: '[{"HTTP": 80}, {"HTTPS": 443}]'
+            - name: grafana.ingress.annotations."alb\.ingress\.kubernetes\.io/ssl-redirect"
+              value: "443"
+            - name: grafana.ingress.annotations."alb\.ingress\.kubernetes\.io/certificate-arn"
+              value: arn:aws:acm:us-east-1:163459217187:certificate/4ff90f30-64f8-40e1-b1b3-8f13d5fac876
+            - name: grafana.ingress.annotations."external-dns\.alpha\.kubernetes\.io/hostname"
+              value: grafana-{{region}}.blizzard.co.il
+            - name: grafana.ingress.annotations."external-dns\.alpha\.kubernetes\.io/ttl"
+              value: "300"
             - name: clusterName
               value: 'eks-blizzard-{{region}}'
             - name: global.region
               value: '{{region}}'
       destination:
         server: '{{url}}'
+        namespace: monitoring
+      # Ignore the problematic ExternalSecret resource
+      ignoreDifferences:
+      - group: external-secrets.io
+        kind: ExternalSecret
+        name: alertmanager-slack-webhook
         namespace: monitoring
       syncPolicy:
         automated:

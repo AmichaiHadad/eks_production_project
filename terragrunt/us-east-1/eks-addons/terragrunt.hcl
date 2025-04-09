@@ -29,6 +29,46 @@ dependency "node_groups" {
   config_path = "../node-groups"
 }
 
+# Generate Kubernetes and Helm providers configuration
+generate "providers" {
+  path      = "kubernetes_providers.tf"
+  if_exists = "overwrite_terragrunt"
+  contents  = <<-EOF
+    provider "kubernetes" {
+      host                   = "${dependency.eks.outputs.cluster_endpoint}"
+      cluster_ca_certificate = base64decode("${dependency.eks.outputs.cluster_certificate_authority_data}")
+      exec {
+        api_version = "client.authentication.k8s.io/v1beta1"
+        command     = "aws"
+        args        = ["eks", "get-token", "--cluster-name", "${dependency.eks.outputs.cluster_name}", "--region", "${include.region.locals.aws_region}"]
+      }
+    }
+
+    provider "helm" {
+      kubernetes {
+        host                   = "${dependency.eks.outputs.cluster_endpoint}"
+        cluster_ca_certificate = base64decode("${dependency.eks.outputs.cluster_certificate_authority_data}")
+        exec {
+          api_version = "client.authentication.k8s.io/v1beta1"
+          command     = "aws"
+          args        = ["eks", "get-token", "--cluster-name", "${dependency.eks.outputs.cluster_name}", "--region", "${include.region.locals.aws_region}"]
+        }
+      }
+    }
+
+    provider "kubectl" {
+      host                   = "${dependency.eks.outputs.cluster_endpoint}"
+      cluster_ca_certificate = base64decode("${dependency.eks.outputs.cluster_certificate_authority_data}")
+      load_config_file       = false
+      exec {
+        api_version = "client.authentication.k8s.io/v1beta1"
+        command     = "aws"
+        args        = ["eks", "get-token", "--cluster-name", "${dependency.eks.outputs.cluster_name}", "--region", "${include.region.locals.aws_region}"]
+      }
+    }
+  EOF
+}
+
 # Inputs to the EKS Addons module
 inputs = {
   # Required parameter - cluster name from the EKS module output
@@ -44,7 +84,12 @@ inputs = {
   # Enable IRSA for Route53 DNS Manager
   create_route53_dns_manager_irsa = true
   route53_dns_manager_namespace = "monitoring"
-  route53_dns_manager_service_account = "route53-dns-manager"
+  route53_dns_manager_service_account = "external-dns"
+  
+  # ExternalDNS specific inputs
+  external_dns_chart_version = "1.14.5"
+  external_dns_domain_filter = include.region.locals.domain_name
+  external_dns_txt_owner_id  = dependency.eks.outputs.cluster_name
   
   # Optional parameters - if specific versions are needed
   vpc_cni_version    = ""  # Leave empty for latest version

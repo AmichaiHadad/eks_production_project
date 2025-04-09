@@ -22,6 +22,9 @@ server:
       alb.ingress.kubernetes.io/scheme: internet-facing
       alb.ingress.kubernetes.io/target-type: ip
       alb.ingress.kubernetes.io/group.name: "argocd"
+      # Add annotation for ExternalDNS
+      external-dns.alpha.kubernetes.io/hostname: ${ingress_host}
+      external-dns.alpha.kubernetes.io/ttl: "300" # Optional: set DNS record TTL
       %{if ingress_tls_secret != ""}
       alb.ingress.kubernetes.io/certificate-arn: ${ingress_tls_secret}
       # Allow both HTTP and HTTPS to prevent ArgoCD redirect loops
