@@ -59,7 +59,7 @@ variable "create_route53_dns_manager_irsa" {
 variable "route53_dns_manager_namespace" {
   description = "Kubernetes namespace where the Route53 DNS Manager service account is located"
   type        = string
-  default     = "data"
+  default     = "kube-system"
 }
 
 variable "route53_dns_manager_service_account" {

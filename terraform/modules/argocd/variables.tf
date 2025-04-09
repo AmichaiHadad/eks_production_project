@@ -95,15 +95,3 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
-
-variable "dns_managed" {
-  description = "Whether to manage DNS records for ArgoCD"
-  type        = bool
-  default     = false
-}
-
-variable "domain_name" {
-  description = "The root domain name for creating ArgoCD DNS records (e.g., example.com)"
-  type        = string
-  default     = ""
-}

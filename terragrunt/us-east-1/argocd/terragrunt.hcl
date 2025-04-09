@@ -83,8 +83,8 @@ inputs = {
   
   # Enable ingress with ACM certificate
   ingress_enabled         = true
-  # Use domain_name from global inputs and add '-east' for region-specific hostname
-  ingress_host            = "argocd-east.${include.region.locals.domain_name}"
+  # Use domain_name from global inputs and region for region-specific hostname
+  ingress_host            = "argocd-${include.region.locals.aws_region}.${include.region.locals.domain_name}"
   
   # Use ACM certificate ARN from region config for TLS
   ingress_tls_secret      = include.region.locals.acm_certificate_arn
@@ -121,8 +121,4 @@ inputs = {
     Region      = include.region.locals.aws_region
     Environment = "production"
   }
-  
-  # DNS configuration - Use variables from region.hcl
-  domain_name = include.region.locals.domain_name
-  dns_managed = true
 }

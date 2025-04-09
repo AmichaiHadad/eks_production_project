@@ -81,11 +81,13 @@ inputs = {
   namespace               = "argocd"
   argocd_helm_chart_version = "5.51.4"  # Compatible with Argo CD 2.14+
   
+  # Enable ingress with ACM certificate
   ingress_enabled         = true
-  ingress_host            = "argocd.${include.region.locals.subdomain}.${include.region.locals.domain_name}"
+  # Use domain_name from global inputs and region for region-specific hostname
+  ingress_host            = "argocd-${include.region.locals.aws_region}.${include.region.locals.domain_name}"
   
-  # Use ACM certificate ARN for TLS
-  ingress_tls_secret      = "" # We'll need to create an ACM certificate and put ARN here
+  # Use ACM certificate ARN from region config for TLS
+  ingress_tls_secret      = include.region.locals.acm_certificate_arn
   
   service_type            = "ClusterIP"
   

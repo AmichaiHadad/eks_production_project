@@ -94,18 +94,69 @@ resource "helm_release" "karpenter" {
   ]
 
   set {
-    name  = "settings.aws.clusterName"
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
+    value = aws_iam_role.karpenter_controller.arn
+  }
+
+  set {
+    name = "serviceAccount.create"
+    value = "true"
+  }
+
+  set {
+    name = "serviceAccount.name"
+    value = "karpenter-controller"
+  }
+
+  set {
+    name = "settings.aws.interruptionQueueName"
     value = var.cluster_name
   }
 
   set {
-    name  = "settings.aws.clusterEndpoint"
-    value = var.cluster_endpoint
+    name = "controller.resources.requests.cpu"
+    value = "200m"
   }
 
   set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn"
-    value = aws_iam_role.karpenter_controller.arn
+    name = "controller.resources.requests.memory"
+    value = "256Mi"
+  }
+
+  set {
+    name = "controller.resources.limits.cpu"
+    value = "1"
+  }
+
+  set {
+    name = "controller.resources.limits.memory"
+    value = "1Gi"
+  }
+
+  set {
+    name = "nodeSelector.node-role"
+    value = "management"
+  }
+
+  set {
+    name  = "tolerations[0].key"
+    value = "management"
+  }
+
+  set {
+    name  = "tolerations[0].value"
+    value = "true"
+    type  = "string"
+  }
+
+  set {
+    name  = "tolerations[0].effect"
+    value = "NoSchedule"
+  }
+
+  set {
+    name  = "tolerations[0].operator"
+    value = "Equal"
   }
 
   depends_on = [

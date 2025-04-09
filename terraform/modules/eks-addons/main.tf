@@ -245,85 +245,88 @@ resource "helm_release" "external_dns" {
   repository = "https://kubernetes-sigs.github.io/external-dns/"
   chart      = "external-dns"
   version    = var.external_dns_chart_version
-  namespace  = var.route53_dns_manager_namespace # Deploy into the namespace specified for the SA (e.g., monitoring)
+  namespace  = var.route53_dns_manager_namespace # Deploy into the namespace specified for the SA (e.g., kube-system)
   create_namespace = true # Create the namespace if it doesn't exist
 
-  # Use values block with YAML heredoc for better structure and type handling
-  values = [
-    <<-EOT
-    serviceAccount:
-      create: true
-      name: ${var.route53_dns_manager_service_account}
-      annotations:
-        eks.amazonaws.com/role-arn: ${aws_iam_role.route53_dns_manager[0].arn}
-    
-    # Set log level directly
-    logLevel: debug
-
-    domainFilters:
-      - ${var.external_dns_domain_filter}
-      
-    txtOwnerId: ${var.external_dns_txt_owner_id != "" ? var.external_dns_txt_owner_id : var.cluster_name}
-    
-    policy: sync # Sync DNS records with resources
-    
-    provider: aws
-    
-    aws:
-      zoneType: public # Explicitly set zone type
-      
-    # Schedule on monitoring nodes (or management, adjust if needed)
-    nodeSelector:
-      node-role: monitoring
-      
-    tolerations:
-    - key: "monitoring"
-      value: "true"
-      effect: "NoSchedule"
-      operator: "Equal" # Ensure operator is specified
-      
-    # Add resource requests/limits if needed
-    # resources:
-    #   requests:
-    #     cpu: 100m
-    #     memory: 128Mi
-    #   limits:
-    #     cpu: 200m
-    #     memory: 256Mi
-        
-    # Disable Helm chart's RBAC creation
-    rbac:
-      create: false
-    EOT
-  ]
+  # --- Use individual 'set' blocks instead --- 
+  set {
+    name  = "serviceAccount.create"
+    value = "true"
+  }
+  set {
+    name  = "serviceAccount.name"
+    value = var.route53_dns_manager_service_account
+  }
+  set {
+    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn" # Double-escape dots for Helm
+    value = aws_iam_role.route53_dns_manager[0].arn
+  }
+  set {
+    name = "logLevel"
+    value = "debug"
+  }
+  set {
+    name = "domainFilters[0]" # Use array index
+    value = var.external_dns_domain_filter
+  }
+  set {
+    name = "txtOwnerId"
+    value = var.external_dns_txt_owner_id != "" ? var.external_dns_txt_owner_id : var.cluster_name
+  }
+  set {
+    name = "policy"
+    value = "sync"
+  }
+  set {
+    name = "provider"
+    value = "aws"
+  }
+  set {
+    name = "aws.zoneType"
+    value = "public"
+  }
+  set {
+    name = "nodeSelector.node-role" # Correct syntax for map keys
+    value = "management"
+  }
+  set {
+    name  = "tolerations[0].key"
+    value = "management"
+  }
+  set {
+    name  = "tolerations[0].value"
+    value = "true"
+    type  = "string"
+  }
+  set {
+    name  = "tolerations[0].effect"
+    value = "NoSchedule"
+  }
+  set {
+    name  = "tolerations[0].operator"
+    value = "Equal"
+  }
+  set {
+    name = "rbac.create"
+    value = "true"
+  }
 
   depends_on = [
     aws_iam_role_policy_attachment.route53_dns_manager
   ]
 }
 
-# Explicitly create the ClusterRoleBinding using Terraform
-resource "kubernetes_cluster_role_binding" "external_dns_binding" {
-  count = var.create_route53_dns_manager_irsa ? 1 : 0
+# Network Policy to allow ExternalDNS egress to API server and DNS
+resource "kubectl_manifest" "external_dns_netpol" {
+  count = var.create_route53_dns_manager_irsa ? 1 : 0 # Only create if ExternalDNS is deployed
 
-  metadata {
-    name = "external-dns-tf-binding" # Use a distinct name
-  }
+  yaml_body = templatefile("${path.module}/templates/external-dns-netpol.yaml", {
+    # Pass the correct namespace where ExternalDNS is deployed
+    namespace = var.route53_dns_manager_namespace 
+  })
 
-  role_ref {
-    api_group = "rbac.authorization.k8s.io"
-    kind      = "ClusterRole"
-    # Use the standard name Helm chart creates, or define the ClusterRole explicitly here too
-    name      = "external-dns"
-  }
-
-  subject {
-    kind      = "ServiceAccount"
-    name      = var.route53_dns_manager_service_account # This is the 'external-dns' SA name
-    namespace = var.route53_dns_manager_namespace   # Namespace 'monitoring'
-  }
-
+  # Ensure this applies after the Helm release which creates the pods/labels
   depends_on = [
-    helm_release.external_dns # Ensure Helm release runs first to create the SA and Role
+    helm_release.external_dns
   ]
 }

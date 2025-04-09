@@ -6,13 +6,6 @@ serviceAccount:
   annotations:
     eks.amazonaws.com/role-arn: ${iam_role_arn}
 
-settings:
-  aws:
-    clusterName: ${cluster_name}
-    clusterEndpoint: ${cluster_endpoint}
-    defaultInstanceProfile: KarpenterNodeInstanceProfile-${cluster_name}
-    interruptionQueueName: ${cluster_name}
-
 controller:
   resources:
     requests:
@@ -21,6 +14,13 @@ controller:
     limits:
       cpu: 1
       memory: 1Gi
+  env:
+    - name: CLUSTER_NAME
+      value: ${cluster_name}
+
+settings:
+  aws:
+    clusterName: ${cluster_name}
 
 nodeTemplate:
   subnetSelector:
@@ -38,8 +38,10 @@ affinity:
           operator: In
           values:
           - management
-  tolerations:
-  - key: "management"
-    operator: "Equal"
-    value: "true"
-    effect: "NoSchedule"
+
+# Moving tolerations outside affinity block
+tolerations:
+- key: "management"
+  operator: "Equal"
+  value: "true"
+  effect: "NoSchedule"

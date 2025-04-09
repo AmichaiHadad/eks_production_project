@@ -77,8 +77,7 @@ mysql:
   # Service configurations
   service:
     type: ClusterIP
-    port: 3306
-  
+    port: 3306  
   # Primary label
   primary:
     labels:

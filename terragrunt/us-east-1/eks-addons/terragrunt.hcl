@@ -83,7 +83,7 @@ inputs = {
   
   # Enable IRSA for Route53 DNS Manager
   create_route53_dns_manager_irsa = true
-  route53_dns_manager_namespace = "monitoring"
+  route53_dns_manager_namespace = "kube-system"
   route53_dns_manager_service_account = "external-dns"
   
   # ExternalDNS specific inputs
