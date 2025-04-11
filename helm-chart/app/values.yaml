@@ -49,10 +49,6 @@ ingress:
         - path: /
           pathType: Prefix
 
-# Weather API key (base64 encoded)
-# This is a placeholder. In production, inject the actual value via CI/CD
-weatherApiKey: "cGxhY2Vob2xkZXI="  # "placeholder" in base64
-
 # Environment variables
 env:
   - name: WELCOME_MESSAGE
@@ -60,28 +56,31 @@ env:
   - name: WEATHER_API_URL
     value: "https://api.openweathermap.org/data/2.5/weather"
 
-# Secrets references
+# Secrets configuration - source from External Secrets
 secrets:
-  - name: WEATHER_API_KEY
-    secretKeyRef:
-      name: app-secrets
-      key: weather-api-key
-  - name: DB_HOST
-    secretKeyRef:
-      name: mysql-secrets
-      key: host
-  - name: DB_USER
-    secretKeyRef:
-      name: mysql-secrets
-      key: username
-  - name: DB_PASSWORD
-    secretKeyRef:
-      name: mysql-secrets
-      key: password
-  - name: DB_NAME
-    secretKeyRef:
-      name: mysql-secrets
-      key: database
+  # Define prefixes for AWS Secret Manager secrets (for pattern matching)
+  weatherAPIPrefix: "eks-blizzard/weather-api"
+  mysqlAppUserPrefix: "eks-blizzard/mysql-app-user"
+  # Optional path within the provider
+  path: ""
+  
+  # Define how environment variables map to Kubernetes secrets synced by ESO
+  envFromSecrets:
+    - secretName: app-secrets # Contains weather-api-key
+      envVar: WEATHER_API_KEY
+      secretKey: weather-api-key
+    - secretName: mysql-app-creds # Contains host, username, password, database
+      envVar: DB_HOST
+      secretKey: host
+    - secretName: mysql-app-creds
+      envVar: DB_USER
+      secretKey: username
+    - secretName: mysql-app-creds
+      envVar: DB_PASSWORD
+      secretKey: password
+    - secretName: mysql-app-creds
+      envVar: DB_NAME
+      secretKey: database
 
 # Pod disruption budget for HA
 podDisruptionBudget:

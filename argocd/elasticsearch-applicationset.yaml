@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: elasticsearch-service
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: elasticsearch
+            namespace: data
+            server: https://kubernetes.default.svc
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: argocd
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/AmichaiHadad/eks_app_2.git
+        targetRevision: main
+        path: helm-chart/{{name}}
+        helm:
+          values: |
+            replicas: "3"
+            discovery: "multi-node"
+      destination:
+        server: '{{server}}'
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true 

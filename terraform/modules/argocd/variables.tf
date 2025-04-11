@@ -1,3 +1,8 @@
+variable "aws_region" {
+  description = "The AWS region to deploy resources in"
+  type        = string
+}
+
 variable "cluster_name" {
   description = "Name of the EKS cluster"
   type        = string
@@ -75,6 +80,7 @@ variable "application_sets" {
     target_namespace = string
     auto_sync       = bool
     self_heal       = bool
+    values          = optional(map(string), {})
   }))
   default     = []
 }

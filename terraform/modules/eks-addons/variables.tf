@@ -69,9 +69,9 @@ variable "route53_dns_manager_service_account" {
 }
 
 variable "external_dns_chart_version" {
-  description = "Version of the ExternalDNS Helm chart"
+  description = "Helm chart version for ExternalDNS."
   type        = string
-  default     = "1.14.5" # Check for latest compatible version
+  default     = "8.7.11" # Update default to Bitnami chart version
 }
 
 variable "external_dns_domain_filter" {
@@ -84,4 +84,9 @@ variable "external_dns_txt_owner_id" {
   description = "TXT record owner ID for ExternalDNS"
   type        = string
   default     = ""
+}
+
+variable "aws_region" {
+  description = "AWS region for the deployment."
+  type        = string
 }

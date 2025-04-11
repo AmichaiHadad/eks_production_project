@@ -40,53 +40,51 @@ resource "aws_iam_role_policy_attachment" "vpc_cni" {
 
 # Install VPC CNI add-on (recommended for latest version)
 resource "aws_eks_addon" "vpc_cni" {
-  cluster_name = var.cluster_name
-  addon_name   = "vpc-cni"
-  
-  # Use latest available version compatible with cluster version
-  addon_version = var.vpc_cni_version != "" ? var.vpc_cni_version : null
-  
-  # Resolve conflicts by overwriting
+  cluster_name                = var.cluster_name
+  addon_name                 = "vpc-cni"
+  addon_version              = "v1.19.0-eksbuild.1"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
-  
-  # Configure service account role ARN if IRSA is enabled
-  service_account_role_arn = var.create_vpc_cni_irsa ? aws_iam_role.vpc_cni[0].arn : null
-  
-  tags = var.tags
-  
-  # Ensure IAM role is created before the addon
-  depends_on = [aws_iam_role_policy_attachment.vpc_cni]
+  service_account_role_arn    = aws_iam_role.vpc_cni[0].arn
+  tags                       = var.tags
+
+  depends_on = [
+    kubectl_manifest.external_dns_netpol,
+    kubernetes_service_account_v1.external_dns_sa,
+    helm_release.external_dns
+  ]
 }
 
 # Install CoreDNS add-on
 resource "aws_eks_addon" "coredns" {
-  cluster_name = var.cluster_name
-  addon_name   = "coredns"
-  
-  # Use latest available version compatible with cluster version
-  addon_version = var.coredns_version != "" ? var.coredns_version : null
-  
-  # Resolve conflicts by overwriting
+  cluster_name                = var.cluster_name
+  addon_name                 = "coredns"
+  addon_version              = "v1.11.1-eksbuild.4"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
-  
-  tags = var.tags
+  tags                       = var.tags
+
+  depends_on = [
+    kubectl_manifest.external_dns_netpol,
+    kubernetes_service_account_v1.external_dns_sa,
+    helm_release.external_dns
+  ]
 }
 
 # Install kube-proxy add-on
 resource "aws_eks_addon" "kube_proxy" {
-  cluster_name = var.cluster_name
-  addon_name   = "kube-proxy"
-  
-  # Use latest available version compatible with cluster version
-  addon_version = var.kube_proxy_version != "" ? var.kube_proxy_version : null
-  
-  # Resolve conflicts by overwriting
+  cluster_name                = var.cluster_name
+  addon_name                 = "kube-proxy"
+  addon_version              = "v1.29.10-eksbuild.3"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
-  
-  tags = var.tags
+  tags                       = var.tags
+
+  depends_on = [
+    kubectl_manifest.external_dns_netpol,
+    kubernetes_service_account_v1.external_dns_sa,
+    helm_release.external_dns
+  ]
 }
 
 # Create IAM role for EBS CSI Driver service account
@@ -126,23 +124,19 @@ resource "aws_iam_role_policy_attachment" "ebs_csi_driver" {
 
 # Install AWS EBS CSI Driver add-on
 resource "aws_eks_addon" "ebs_csi_driver" {
-  cluster_name = var.cluster_name
-  addon_name   = "aws-ebs-csi-driver"
-  
-  # Use latest available version compatible with cluster version
-  addon_version = var.ebs_csi_driver_version != "" ? var.ebs_csi_driver_version : null
-  
-  # Resolve conflicts by overwriting
+  cluster_name                = var.cluster_name
+  addon_name                 = "aws-ebs-csi-driver"
+  addon_version              = "v1.41.0-eksbuild.1"
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
-  
-  # Configure service account role ARN if IRSA is enabled
-  service_account_role_arn = var.create_ebs_csi_driver_irsa ? aws_iam_role.ebs_csi_driver[0].arn : null
-  
-  tags = var.tags
-  
-  # Ensure IAM role is created before the addon
-  depends_on = [aws_iam_role_policy_attachment.ebs_csi_driver]
+  service_account_role_arn    = aws_iam_role.ebs_csi_driver[0].arn
+  tags                       = var.tags
+
+  depends_on = [
+    kubectl_manifest.external_dns_netpol,
+    kubernetes_service_account_v1.external_dns_sa,
+    helm_release.external_dns
+  ]
 }
 
 # Route53 DNS Manager IAM Role and Policy
@@ -237,82 +231,79 @@ resource "aws_iam_role_policy_attachment" "route53_dns_manager" {
   ]
 }
 
+# Create the Kubernetes Service Account if IRSA is enabled
+resource "kubernetes_service_account_v1" "external_dns_sa" {
+  count = var.create_route53_dns_manager_irsa ? 1 : 0
+
+  metadata {
+    name      = var.route53_dns_manager_service_account
+    namespace = var.route53_dns_manager_namespace
+    labels = {
+      "app.kubernetes.io/managed-by" = "Terraform"
+    }
+    annotations = {
+      "eks.amazonaws.com/role-arn" = aws_iam_role.route53_dns_manager[0].arn
+    }
+  }
+  automount_service_account_token = true # Ensure token is mounted
+}
+
 # Deploy ExternalDNS using Helm chart
 resource "helm_release" "external_dns" {
-  count = var.create_route53_dns_manager_irsa ? 1 : 0 # Only deploy if IRSA role is created
+  count = var.create_route53_dns_manager_irsa ? 1 : 0
 
-  name       = "external-dns"
-  repository = "https://kubernetes-sigs.github.io/external-dns/"
-  chart      = "external-dns"
-  version    = var.external_dns_chart_version
-  namespace  = var.route53_dns_manager_namespace # Deploy into the namespace specified for the SA (e.g., kube-system)
-  create_namespace = true # Create the namespace if it doesn't exist
+  name             = "external-dns"
+  repository       = "oci://registry-1.docker.io/bitnamicharts" # Use OCI repository
+  chart            = "external-dns"                            # Chart name
+  namespace        = var.route53_dns_manager_namespace
+  version          = var.external_dns_chart_version
+  create_namespace = false # Assume namespace exists or is managed elsewhere
 
-  # --- Use individual 'set' blocks instead --- 
-  set {
-    name  = "serviceAccount.create"
-    value = "true"
-  }
-  set {
-    name  = "serviceAccount.name"
-    value = var.route53_dns_manager_service_account
-  }
-  set {
-    name  = "serviceAccount.annotations.eks\\.amazonaws\\.com/role-arn" # Double-escape dots for Helm
-    value = aws_iam_role.route53_dns_manager[0].arn
-  }
-  set {
-    name = "logLevel"
-    value = "debug"
-  }
-  set {
-    name = "domainFilters[0]" # Use array index
-    value = var.external_dns_domain_filter
-  }
-  set {
-    name = "txtOwnerId"
-    value = var.external_dns_txt_owner_id != "" ? var.external_dns_txt_owner_id : var.cluster_name
-  }
-  set {
-    name = "policy"
-    value = "sync"
-  }
-  set {
-    name = "provider"
-    value = "aws"
-  }
-  set {
-    name = "aws.zoneType"
-    value = "public"
-  }
-  set {
-    name = "nodeSelector.node-role" # Correct syntax for map keys
-    value = "management"
-  }
-  set {
-    name  = "tolerations[0].key"
-    value = "management"
-  }
-  set {
-    name  = "tolerations[0].value"
-    value = "true"
-    type  = "string"
-  }
-  set {
-    name  = "tolerations[0].effect"
-    value = "NoSchedule"
-  }
-  set {
-    name  = "tolerations[0].operator"
-    value = "Equal"
-  }
-  set {
-    name = "rbac.create"
-    value = "true"
-  }
+  values = [
+    <<-EOT
+    provider: aws
+    aws:
+      zoneType: public
+      region: ${var.aws_region}
+    sources:
+      - service
+      - ingress
+    domainFilters:
+      - ${var.external_dns_domain_filter}
+    txtOwnerId: ${var.external_dns_txt_owner_id}
+    policy: sync
+    rbac:
+      create: true # Ensure RBAC resources are created for cluster-wide access
+      pspEnabled: false # Assuming you are not using PodSecurityPolicy
+    serviceAccount:
+      create: false # We create it separately via Terraform
+      name: ${var.route53_dns_manager_service_account}
+      # Annotations are now on the kubernetes_service_account_v1 resource
+    # Schedule on management nodes
+    nodeSelector:
+      node-role: management
+    tolerations:
+      - key: "management"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+    # Add label for network policy
+    podLabels:
+      networking/allow-external: "true"
+    # Optional: Set resource requests/limits if needed
+    # resources:
+    #   requests:
+    #     cpu: 100m
+    #     memory: 128Mi
+    #   limits:
+    #     cpu: 200m
+    #     memory: 256Mi
+    EOT
+  ]
 
   depends_on = [
-    aws_iam_role_policy_attachment.route53_dns_manager
+    aws_iam_role_policy_attachment.route53_dns_manager,
+    kubernetes_service_account_v1.external_dns_sa # Add dependency on the SA
   ]
 }
 

@@ -1,0 +1,22 @@
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: mysql-password
+  namespace: data
+spec:
+  refreshInterval: "1h"
+  secretStoreRef:
+    name: aws-secretsmanager
+    kind: ClusterSecretStore
+  target:
+    name: mysql-app-user-password-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: mysql-password
+      remoteRef:
+        key: eks-blizzard/mysql-app-user
+        property: password
+    - secretKey: MYSQL_PASSWORD
+      remoteRef:
+        key: eks-blizzard/mysql-app-user
+        property: password

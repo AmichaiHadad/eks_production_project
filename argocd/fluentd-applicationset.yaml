@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: fluentd-service
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: fluentd
+            namespace: logging
+            server: https://kubernetes.default.svc
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: argocd
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/AmichaiHadad/eks_app_2.git
+        targetRevision: main
+        path: helm-chart/{{name}}
+      destination:
+        server: '{{server}}'
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true 

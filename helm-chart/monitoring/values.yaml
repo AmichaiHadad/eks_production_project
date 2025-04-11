@@ -5,6 +5,11 @@ clusterName: eks-blizzard-us-east-1
 global:
   region: us-east-1
 
+# Secret names - these will be overridden by external-secrets module
+secretPrefix: eks-blizzard
+slackWebhookSecretName: ""  # Will be overridden by Argo CD application from Terraform output
+grafanaAdminSecretName: ""  # Will be overridden by Argo CD application from Terraform output
+
 # Alertmanager webhook secret is expected to be managed externally
 # Either created manually or via External Secrets
 # The secret should be named 'alertmanager-slack-webhook' in the monitoring namespace
@@ -37,17 +42,7 @@ kube-prometheus-stack:
       storageClassName: gp2
       size: 10Gi
     ingress:
-      enabled: true
-      ingressClassName: alb
-      annotations:
-        kubernetes.io/ingress.class: alb
-        alb.ingress.kubernetes.io/scheme: internet-facing
-        alb.ingress.kubernetes.io/target-type: ip
-        alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-        alb.ingress.kubernetes.io/ssl-redirect: "443"
-        alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:163459217187:certificate/4ff90f30-64f8-40e1-b1b3-8f13d5fac876
-        external-dns.alpha.kubernetes.io/hostname: grafana-{{ .Values.global.region }}.blizzard.co.il
-        external-dns.alpha.kubernetes.io/ttl: "300"
+      enabled: false
     sidecar:
       dashboards:
         enabled: true
@@ -94,6 +89,7 @@ kube-prometheus-stack:
     enabled: true
     serviceAccount:
       create: true
+    # Add node placement for Prometheus pods
     nodeSelector:
       node-role: monitoring
     tolerations:
@@ -165,6 +161,7 @@ kube-prometheus-stack:
   # Alertmanager configuration
   alertmanager:
     enabled: true
+    # Add node placement for Alertmanager pods
     nodeSelector:
       node-role: monitoring
     tolerations:
@@ -251,10 +248,20 @@ kube-prometheus-stack:
       node: true
       prometheus: true
       time: true
+  
+  # Disable any external-dns components in kube-prometheus-stack
+  externalDns:
+    enabled: false
+  
+  external-dns:
+    enabled: false
 
-# Disable ExternalDNS creation from this chart (should be managed by Terraform)
-# Assuming externalDns might be a subchart or option
+# Explicitly disable external-dns at the root level
+# This ensures we're using the cluster-wide external-dns deployed by terragrunt
 externalDns:
+  enabled: false
+
+external-dns:
   enabled: false
 
 # MySQL exporter

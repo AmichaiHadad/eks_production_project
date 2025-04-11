@@ -1,9 +1,8 @@
 # MySQL Helm chart values
 mysql:
-  # Use StatefulSet instead of Deployment
-  architecture: standalone
-  
-  # Schedule on data nodes
+  architecture: standalone # Use StatefulSet
+
+  # Consolidate all primary node settings under this block
   primary:
     nodeSelector:
       node-role: data
@@ -11,8 +10,6 @@ mysql:
       - key: role
         value: data
         effect: NoSchedule
-    
-    # Resource allocations
     resources:
       limits:
         cpu: 1000m
@@ -20,19 +17,14 @@ mysql:
       requests:
         cpu: 500m
         memory: 1Gi
-    
-    # Persistent storage
     persistence:
       enabled: true
       storageClass: "gp3"
       size: 20Gi
-    
-    # Security
     securityContext:
       fsGroup: 1001
       runAsUser: 1001
-    
-    # Health checks
+    # Use default probes which rely on internal root/probe user
     livenessProbe:
       enabled: true
       initialDelaySeconds: 30
@@ -47,44 +39,36 @@ mysql:
       timeoutSeconds: 1
       failureThreshold: 3
       successThreshold: 1
-  
+    labels:
+      role: mysql-primary
+    
+    # Mount the MySQL secret as environment variables
+    extraEnvVarsSecret: "mysql-app-user-password-secret"
+
   # Database configuration
   auth:
-    # These will be overridden by External Secrets in production
-    rootPassword: "placeholder-root-password"
+    # Set a value for root password - this will get used
+    rootPassword: "change-me-now-random-123!"
+    # Database and user settings
     database: "app_db"
     username: "app_user"
-    password: "placeholder-app-password"
-  
-  # Initialize database with app schema
-  initdbScripts:
-    app-init.sql: |
-      CREATE DATABASE IF NOT EXISTS app_db;
-      USE app_db;
-      
-      CREATE TABLE IF NOT EXISTS requests (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        timestamp DATETIME,
-        client_ip VARCHAR(45),
-        container_id VARCHAR(255)
-      );
-      
-      -- Create app user with limited permissions
-      CREATE USER IF NOT EXISTS 'app_user'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
-      GRANT SELECT, INSERT, UPDATE ON app_db.* TO 'app_user'@'%';
-      FLUSH PRIVILEGES;
-  
+    # Configure which keys in the secret to use
+    existingSecret: "mysql-app-user-password-secret"
+    secretKeys:
+      password: "mysql-password"
+
   # Service configurations
   service:
     type: ClusterIP
-    port: 3306  
-  # Primary label
-  primary:
-    labels:
-      role: mysql-primary
-  
-  # Additional security parameters
+    port: 3306
+
+  # Top-level security context
   securityContext:
     enabled: true
     fsGroup: 1001
     runAsUser: 1001
+
+# AWS Secrets Manager details
+secrets:
+  # Use prefix for AWS secrets - the find mechanism will locate the active one
+  awsSecretPrefix: "eks-blizzard/mysql-app-user"

@@ -84,6 +84,11 @@ resource "helm_release" "karpenter" {
   namespace  = "karpenter"
   create_namespace = true
 
+  set {
+    name  = "crds.create"
+    value = "false"
+  }
+
   values = [
     templatefile("${path.module}/templates/values.yaml", {
       cluster_name      = var.cluster_name
@@ -179,7 +184,7 @@ resource "kubectl_manifest" "karpenter_provisioner" {
     cluster_endpoint = var.cluster_endpoint
     subnet_ids      = join(",", var.private_subnet_ids)
     security_groups = join(",", var.security_group_ids)
-    region          = var.region
+    region          = var.aws_region
     node_role_name = var.node_role_name
   })
 

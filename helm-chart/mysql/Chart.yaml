@@ -8,5 +8,5 @@ appVersion: "8.0.32"
 # Using Bitnami MySQL as the upstream dependency
 dependencies:
   - name: mysql
-    version: "9.10.5"
-    repository: "https://charts.bitnami.com/bitnami"
+    version: "12.2.4"  # Latest version as of now
+    repository: "oci://registry-1.docker.io/bitnamicharts"

@@ -200,38 +200,40 @@ Deploy the core infrastructure components using Terragrunt. Apply modules in the
 
 ```bash
 # 1. Deploy Networking (VPC, Subnets, etc.)
-terragrunt run-all apply --terragrunt-working-dir terragrunt/us-east-1/networking --terragrunt-non-interactive
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/networking --non-interactive
 
 # 2. Deploy EKS Cluster Control Plane
-terragrunt run-all apply --terragrunt-working-dir terragrunt/us-east-1/eks --terragrunt-non-interactive
-
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/eks --non-interactive
 # 3. Deploy EKS Node Groups
-terragrunt run-all apply --terragrunt-working-dir terragrunt/us-east-1/node-groups --terragrunt-non-interactive
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/node-groups --non-interactive
 
 # 4. Deploy EKS Addons (CNI, CoreDNS, EBS CSI, IRSA roles)
-terragrunt run-all apply --terragrunt-working-dir terragrunt/us-east-1/eks-addons --terragrunt-non-interactive
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/eks-addons --non-interactive
 
 # 5. Deploy External Secrets (Creates AWS Secrets, Deploys ESO)
 # Note: Requires Weather API Key as input (edit terragrunt.hcl or use env var TF_VAR_weather_api_key)
 echo "Ensure WEATHER_API_KEY is set in terragrunt/us-east-1/external-secrets/terragrunt.hcl or as TF_VAR_weather_api_key"
 export TF_VAR_weather_api_key="YOUR_WEATHER_API_KEY" # Set your actual key
 export TF_VAR_slack_webhook_url="YOUR_SLACK_WEBHOOK_URL" # Set your actual webhook URL
-terragrunt run-all apply --terragrunt-working-dir terragrunt/us-east-1/external-secrets --terragrunt-non-interactive
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/external-secrets --non-interactive
 
 # 6. Deploy Argo CD (Includes AWS LB Controller)
-terragrunt run-all apply --terragrunt-working-dir terragrunt/us-east-1/argocd --terragrunt-non-interactive
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/argocd --non-interactive
 
 # 7. Deploy Karpenter Controller
-terragrunt run-all apply --terragrunt-working-dir terragrunt/us-east-1/karpenter --terragrunt-non-interactive
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/karpenter --non-interactive
 
 # 8. Deploy KEDA Controller
-terragrunt run-all apply --terragrunt-working-dir terragrunt/us-east-1/keda --terragrunt-non-interactive
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/keda --non-interactive
 
-# 9. Deploy Network Policies
-terragrunt run-all apply --terragrunt-working-dir terragrunt/us-east-1/network-policies --terragrunt-non-interactive
+# 9. Deploy Trivy Operator
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/trivy-operator --non-interactive
 
-# 10. Deploy Security Policies (PSS, Audit, Polaris, Trivy)
-terragrunt run-all apply --terragrunt-working-dir terragrunt/us-east-1/security-policies --terragrunt-non-interactive
+# 10. Deploy Network Policies
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/network-policies --non-interactive
+
+# 11. Deploy Security Policies (PSS, Audit, Polaris)
+terragrunt run-all apply --working-dir=terragrunt/us-east-1/security-policies --non-interactive
 ```
 
 **Note on External Secrets:** The `external-secrets` Terragrunt module uses a `null_resource` with `local-exec` to manage secrets in AWS Secrets Manager (force-deleting if they exist before creating). Ensure your AWS CLI has permissions for `secretsmanager:DescribeSecret` and `secretsmanager:DeleteSecret`. Make sure to replace the placeholder values for `weather_api_key` and `slack_webhook_url` in `terragrunt/us-east-1/external-secrets/terragrunt.hcl` or pass them as Terraform variables (e.g., using `TF_VAR_...` environment variables).
@@ -310,14 +312,19 @@ IMAGE_TAG=$(git rev-parse --short HEAD)
 sed -i "s|ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/app|${ECR_REPO_EAST}|g" helm-chart/app/values.yaml
 sed -i "s|tag: latest|tag: ${IMAGE_TAG}|g" helm-chart/app/values.yaml
 
-# Update app ingress host and certificate ARN (assuming it uses the same ACM cert)
-sed -i "s|host: app.blizzard.co.il|host: app.${AWS_REGION}.blizzard.co.il|g" helm-chart/app/values.yaml
-sed -i "/alb.ingress.kubernetes.io\/certificate-arn:/c\    alb.ingress.kubernetes.io/certificate-arn: $(grep acm_certificate_arn terragrunt/us-east-1/region.hcl | cut -d \" -f2)" helm-chart/app/values.yaml
+# Update app ingress host (certificate ARN is now passed dynamically if needed)
+# sed -i "s|host: app.blizzard.co.il|host: app.${AWS_REGION}.blizzard.co.il|g" helm-chart/app/values.yaml # Hostname is set by ApplicationSet parameter
+# sed -i "/alb.ingress.kubernetes.io\/certificate-arn:/c\    alb.ingress.kubernetes.io/certificate-arn: $(grep acm_certificate_arn terragrunt/us-east-1/region.hcl | cut -d \" -f2)" helm-chart/app/values.yaml # Cert ARN is set by ApplicationSet parameter
 
-# Commit these changes (optional, but recommended for GitOps consistency)
-# git add helm-chart/app/values.yaml
-# git commit -m "Update app image tag to ${IMAGE_TAG} and regional ingress"
-# git push
+echo "Note: Secret names (e.g., for Weather API, DB creds) are passed dynamically via Argo CD ApplicationSets and should not be manually set in values.yaml for this flow."
+
+# Commit these changes (optional, but recommended for GitOps consistency if manual image update is done)
+REPO_URL=$(git remote get-url origin)
+sed -i "s|https://github.com/AmichaiHadad/eks_app_2.git|${REPO_URL}|g" argocd/*.yaml
+
+echo "Applying ApplicationSets. Dynamic AWS secret names generated by Terraform (external-secrets module)"
+echo "are passed through Terragrunt (argocd module) to these ApplicationSets,"
+echo "which then inject them as parameters into the Helm charts (app, mysql, monitoring)."
 ```
 
 ## Step 9: Kubernetes Pre-configuration (Secrets)
@@ -328,35 +335,23 @@ Before deploying monitoring, create necessary secrets in the `monitoring` namesp
 # Create monitoring namespace
 kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
 
-# Create the Slack webhook secret for Alertmanager
-# Retrieve the URL stored by the external-secrets module
-SLACK_SECRET_NAME=$(aws secretsmanager list-secrets --filters Key=name,Values=eks-blizzard-us-east-1/slack-webhook --region us-east-1 --query 'SecretList[0].Name' --output text)
-SLACK_WEBHOOK_URL=$(aws secretsmanager get-secret-value --secret-id ${SLACK_SECRET_NAME} --query 'SecretString' --output text --region us-east-1 | jq -r .webhookUrl)
+# Create the Slack webhook secret for Alertmanager - REMOVED (Handled by ESO)
+# ... (removed Slack secret retrieval and kubectl create secret)
 
-if [ -z "${SLACK_WEBHOOK_URL}" ] || [ "${SLACK_WEBHOOK_URL}" == "null" ] || [ "${SLACK_WEBHOOK_URL}" == "REPLACE_WITH_ACTUAL_SLACK_WEBHOOK_URL" ]; then
-  echo "WARNING: Slack Webhook URL not found or is a placeholder in Secrets Manager. Creating secret with placeholder."
-  SLACK_WEBHOOK_URL="https://hooks.slack.com/services/PLACEHOLDER/CHANGE/ME"
-fi
+echo "Slack secret creation skipped (managed by ESO)."
 
-kubectl create secret generic alertmanager-slack-webhook \
-  -n monitoring \
-  --from-literal=slack_webhook_url="${SLACK_WEBHOOK_URL}" \
-  --dry-run=client -o yaml | kubectl apply -f -
+# Create Grafana admin credentials secret - REMOVED (Handled by ESO)
+# GRAFANA_PASSWORD=$(openssl rand -base64 16)
+# echo "Generated Grafana password: ${GRAFANA_PASSWORD}"
+# echo "(Save this password securely! It will be stored in AWS Secrets Manager)"
+# 
+# kubectl create secret generic grafana-admin-credentials \
+#   -n monitoring \
+#   --from-literal=admin-user="admin" \
+#   --from-literal=admin-password="${GRAFANA_PASSWORD}" \
+#   --dry-run=client -o yaml | kubectl apply -f -
 
-echo "Alertmanager secret created (check URL if placeholder was used)."
-
-# Create Grafana admin credentials secret
-GRAFANA_PASSWORD=$(openssl rand -base64 16)
-echo "Generated Grafana password: ${GRAFANA_PASSWORD}"
-echo "(Save this password securely!)"
-
-kubectl create secret generic grafana-admin-credentials \
-  -n monitoring \
-  --from-literal=admin-user="admin" \
-  --from-literal=admin-password="${GRAFANA_PASSWORD}" \
-  --dry-run=client -o yaml | kubectl apply -f -
-
-echo "Grafana admin secret created."
+echo "Grafana admin secret creation skipped (managed by ESO)."
 ```
 
 ## Step 10: Deploy Kubernetes Workloads via Argo CD
@@ -383,12 +378,12 @@ kubectl apply -f argocd/monitoring-applicationset.yaml
 echo "Waiting for monitoring stack to sync and become healthy..."
 kubectl wait --for=condition=Healthy applicationset/monitoring -n argocd --timeout=10m
 
-# Reset Grafana password again after deployment (using the previously generated password)
-echo "Waiting for Grafana pod to be ready for password reset..."
-kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=grafana -n monitoring --timeout=180s
-GRAFANA_POD=$(kubectl get pods -n monitoring -l app.kubernetes.io/name=grafana -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n monitoring ${GRAFANA_POD} -- grafana-cli admin reset-admin-password "${GRAFANA_PASSWORD}"
-echo "Grafana admin password reset."
+# Get Grafana Endpoint
+GRAFANA_HOST=$(kubectl get ingress -n monitoring grafana -o jsonpath='{.spec.rules[0].host}')
+echo "Grafana URL: https://${GRAFANA_HOST}"
+# Retrieve password from Secrets Manager for user info
+GRAFANA_PASSWORD_INFO=$(aws secretsmanager get-secret-value --secret-id eks-blizzard/grafana-admin --query SecretString --output text --region us-east-1 | jq -r ' .\"admin-password\" ')
+echo "Grafana Password: ***Retrieved from AWS Secrets Manager*** (use 'aws secretsmanager get-secret-value --secret-id eks-blizzard/grafana-admin' to view)"
 
 # 4. Deploy Autoscaling Configuration (Karpenter Provisioner, KEDA ScaledObject)
 kubectl apply -f argocd/autoscaling-applicationset.yaml
@@ -396,10 +391,10 @@ echo "Waiting for autoscaling components to sync and become healthy..."
 kubectl wait --for=condition=Healthy applicationset/autoscaling-components -n argocd --timeout=5m
 
 # 5. Security ApplicationSet - SKIPPED
-# Note: Security components (ESO, Polaris, Trivy) and policies (PSS, Audit) 
-# are deployed via Terragrunt modules (external-secrets, security-policies).
+# Note: Security components (ESO, Polaris, Trivy Operator) and policies (PSS, Audit, NetworkPolicies) 
+# are now primarily deployed via Terragrunt modules (external-secrets, trivy-operator, network-policies, security-policies).
 # Applying argocd/security-applicationset.yaml would cause conflicts.
-# echo "Skipping security-applicationset.yaml as components are managed by Terragrunt."
+echo "Skipping security-applicationset.yaml as components are managed by Terragrunt."
 # # kubectl apply -f argocd/security-applicationset.yaml
 # # echo "Waiting for security components to sync..."
 # # kubectl wait --for=condition=Healthy applicationset/security-components -n argocd --timeout=5m
@@ -424,7 +419,7 @@ echo "Argo CD Password: ${ARGO_PASS}"
 # Get Grafana Endpoint
 GRAFANA_HOST=$(kubectl get ingress -n monitoring grafana -o jsonpath='{.spec.rules[0].host}')
 echo "Grafana URL: https://${GRAFANA_HOST}"
-echo "Grafana Password: ${GRAFANA_PASSWORD}"
+echo "Grafana Password: ${GRAFANA_PASSWORD_INFO}"
 ```
 
 Access these URLs in your browser. Note that DNS propagation might take a few minutes.
@@ -467,6 +462,9 @@ chmod +x testing/security-tests.sh
 ```
 Review the output for any security check failures.
 
+# Note: Ensure Trivy Operator pods are running in trivy-system namespace:
+# kubectl get pods -n trivy-system
+
 ## Cleanup (Destruction Flow)
 
 To avoid ongoing costs, destroy all resources when you are finished testing.
@@ -487,6 +485,7 @@ sleep 180 # Allow time for resource deletion
 # Run from the root of the repository.
 terragrunt run-all destroy --terragrunt-working-dir terragrunt/us-east-1/security-policies --terragrunt-non-interactive
 terragrunt run-all destroy --terragrunt-working-dir terragrunt/us-east-1/network-policies --terragrunt-non-interactive
+terragrunt run-all destroy --terragrunt-working-dir terragrunt/us-east-1/trivy-operator --terragrunt-non-interactive
 terragrunt run-all destroy --terragrunt-working-dir terragrunt/us-east-1/keda --terragrunt-non-interactive
 terragrunt run-all destroy --terragrunt-working-dir terragrunt/us-east-1/karpenter --terragrunt-non-interactive
 terragrunt run-all destroy --terragrunt-working-dir terragrunt/us-east-1/argocd --terragrunt-non-interactive

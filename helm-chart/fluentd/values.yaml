@@ -18,6 +18,9 @@ fluentd:
         value: "9200"
       - name: ELASTICSEARCH_SCHEME
         value: "http"
+    nodeSelector: {}
+    tolerations:
+      - operator: "Exists"
   
   # Disable aggregator deployment - we'll send logs directly to Elasticsearch
   aggregator:
@@ -117,10 +120,6 @@ fluentd:
       cpu: 100m
       memory: 200Mi
   
-  # Run on all nodes
-  tolerations:
-    - operator: Exists
-
   # RBAC settings
   rbac:
     create: true

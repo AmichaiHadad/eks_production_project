@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: mysql-service
+  namespace: argocd
+spec:
+  # Use list generator instead of configMap generator
+  generators:
+    - list:
+        elements:
+          - name: mysql
+            namespace: data
+            server: https://kubernetes.default.svc
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: argocd
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/AmichaiHadad/eks_app_2.git
+        targetRevision: main
+        path: helm-chart/{{name}}
+        helm:
+          values: |
+            # AWS Secrets Manager configuration
+            secrets:
+              # Use prefix for pattern matching
+              awsSecretPrefix: "eks-blizzard/mysql-app-user"
+            
+            # MySQL auth configuration
+            mysql:
+              auth:
+                # Set a secure root password
+                rootPassword: "change-me-now-random-123!"
+                # Database and user settings
+                database: "app_db"
+                username: "app_user"
+                # Use existing secret
+                existingSecret: "mysql-app-user-password-secret"
+                secretKeys:
+                  password: "mysql-password"
+              
+              # Primary configuration
+              primary:
+                # Use environment variables from the secret
+                extraEnvVarsSecret: "mysql-app-user-password-secret"
+      destination:
+        server: '{{server}}'
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true 

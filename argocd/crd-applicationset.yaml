@@ -1,0 +1,48 @@
+# argocd/crd-applicationset.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: crds # Renamed for clarity
+  namespace: argocd
+spec:
+  generators:
+    # List the clusters where CRDs should be installed
+    - list:
+        elements:
+          - name: crds-us-east-1 # Application name for us-east-1
+            cluster: eks-blizzard-us-east-1
+            url: https://kubernetes.default.svc
+          # Add us-west-2 if managing both clusters with this Argo CD instance
+          # - name: crds-us-west-2
+          #   cluster: eks-blizzard-us-west-2
+          #   url: https://kubernetes.default.svc
+  template:
+    metadata:
+      # Use a specific name pattern for the Application resource managing CRDs
+      name: '{{name}}'
+    spec:
+      project: default
+      source:
+        # repoURL ideally shouldn't be hardcoded, but keeping consistent with other AppSets for now.
+        # Consider Argo CD Project settings or another mechanism if this needs to be more dynamic.
+        repoURL: https://github.com/AmichaiHadad/eks_app_2.git
+        targetRevision: main
+        # Point to the single directory containing ALL required CRDs
+        path: crd-manifests/all-crds
+      destination:
+        # CRDs are cluster-scoped, target namespace doesn't strictly matter for CRD resources.
+        # Using 'kube-system' as a common target for cluster-wide resources.
+        server: '{{url}}'
+        namespace: kube-system # Target kube-system for cluster-wide resources
+      syncPolicy:
+        automated:
+          prune: false # CRDs should generally not be pruned automatically
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=false # kube-system already exists
+          - ApplyOutOfSyncOnly=true
+          # Use ServerSideApply for robustness with CRDs
+          - ServerSideApply=true
+          # Skip Helm hooks and CRD checks as we are applying raw manifests
+          - SkipHelmHooks=true
+          - Replace=false # Avoid replacing CRDs unless necessary

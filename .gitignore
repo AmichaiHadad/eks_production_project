@@ -239,3 +239,17 @@ mysql-data/
 elasticsearch-data/
 load-test-results/
 app-credentials.json
+
+# Ignore generated provider files
+**/provider.tf
+**/backend.tf
+**/generated_kubernetes_providers.tf
+
+# Ignore IDE / OS files
+.terragrunt-cache
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+*.tfplan
+*.tfvars.json
+.terraform.lock.hcl

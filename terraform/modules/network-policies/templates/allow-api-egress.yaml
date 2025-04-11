@@ -1,0 +1,25 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-egress
+  namespace: ${namespace}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Egress
+  egress:
+  - to:
+    # Allow egress to the Kubernetes API server endpoint(s)
+    # This typically resides in the default namespace
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: default
+      podSelector:
+        # Selector might vary, targeting the service IP is more reliable
+        # but difficult. Allowing egress to the default namespace on 443/6443 is common.
+        matchLabels: { }
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 6443 

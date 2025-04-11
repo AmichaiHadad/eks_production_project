@@ -33,6 +33,10 @@ spec:
               value: '{{region}}'
             - name: ingress.acmCertificateArn
               value: '{{acm_certificate_arn}}'
+            - name: secrets.weatherAPIPrefix
+              value: 'eks-blizzard/weather-api'
+            - name: secrets.mysqlAppUserPrefix
+              value: 'eks-blizzard/mysql-app-user'
       destination:
         server: '{{url}}'
         namespace: app

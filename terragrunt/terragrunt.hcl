@@ -17,50 +17,13 @@ remote_state {
   }
 }
 
-# Generate AWS provider configuration
-generate "provider" {
-  path      = "provider.tf"
-  if_exists = "overwrite_terragrunt"
-  contents  = <<EOF
-provider "aws" {
-  region = "${local.aws_region}"
-  default_tags {
-    tags = {
-      Project     = "${local.project_name}"
-      Environment = "${local.environment}"
-      ManagedBy   = "Terraform"
-    }
-  }
-}
-
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    kubernetes = {
-      source  = "hashicorp/kubernetes"
-      version = "~> 2.20"
-    }
-    helm = {
-      source  = "hashicorp/helm"
-      version = "~> 2.10"
-    }
-    kubectl = {
-      source  = "gavinbunney/kubectl"
-      version = "~> 1.14"
-    }
-  }
-  required_version = "~> 1.11"
-}
-EOF
-}
-
 # Define global variables
 locals {
   # Extract the region from the directory path
   aws_region = element(split("/", path_relative_to_include()), 0)
+  
+  # Construct the cluster name dynamically based on the region
+  cluster_name = "eks-blizzard-${local.aws_region}" # Assumes naming convention "eks-blizzard-<region>"
   
   # Common project settings
   project_name = "eks-project"
@@ -82,4 +45,6 @@ inputs = {
   aws_region   = local.aws_region
   domain_name  = local.domain_name
   tags         = local.common_tags
+  # Pass cluster_name as an input if modules need it explicitly
+  cluster_name = local.cluster_name
 }

@@ -39,7 +39,7 @@ resource "aws_iam_policy" "external_secrets" {
           "secretsmanager:ListSecretVersionIds"
         ]
         Resource = [
-          "arn:aws:secretsmanager:${var.region}:${var.account_id}:secret:${var.secret_prefix}*"
+          "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:${var.secret_prefix}*"
         ]
       },
       {
@@ -57,7 +57,7 @@ resource "aws_iam_policy" "external_secrets" {
           "ssm:GetParametersByPath"
         ]
         Resource = [
-          "arn:aws:ssm:${var.region}:${var.account_id}:parameter/${var.parameter_prefix}*"
+          "arn:aws:ssm:${var.aws_region}:${var.account_id}:parameter/${var.parameter_prefix}*"
         ]
       }
     ]
@@ -79,10 +79,15 @@ resource "helm_release" "external_secrets" {
   namespace  = "external-secrets"
   create_namespace = true
 
+  set {
+    name  = "crds.create"
+    value = "false"
+  }
+
   values = [
     templatefile("${path.module}/templates/values.yaml", {
       role_arn = aws_iam_role.external_secrets.arn
-      region   = var.region
+      region   = var.aws_region
     })
   ]
 
@@ -95,7 +100,7 @@ resource "kubectl_manifest" "secretstore" {
   yaml_body = templatefile("${path.module}/templates/secretstore.yaml", {
     name   = "aws-secretsmanager"
     role_arn = aws_iam_role.external_secrets.arn
-    region   = var.region
+    region   = var.aws_region
   })
 
   depends_on = [
@@ -103,70 +108,113 @@ resource "kubectl_manifest" "secretstore" {
   ]
 }
 
-resource "null_resource" "manage_mysql_secret" {
-  # Trigger on any change to the secret name or content
-  triggers = {
-    # The full secret name including the region-specific prefix
-    secret_name = "${var.secret_prefix}/mysql"
-    password = var.generate_random_password ? "random" : var.mysql_password
-    region = var.region
-    username = "app_user"
-  }
+# Create a ConfigMap to store all secret names
+resource "kubectl_manifest" "secret_names_configmap" {
+  yaml_body = yamlencode({
+    apiVersion = "v1"
+    kind = "ConfigMap"
+    metadata = {
+      name = "terraform-secret-outputs"
+      namespace = "argocd"
+      labels = {
+        "app.kubernetes.io/managed-by" = "terraform"
+        "app.kubernetes.io/part-of" = "external-secrets"
+      }
+    }
+    data = {
+      mysql_secret_name = aws_secretsmanager_secret.mysql_app_user.name
+      weather_api_secret_name = aws_secretsmanager_secret.weather_api.name
+      slack_webhook_secret_name = aws_secretsmanager_secret.slack_webhook.name
+      grafana_admin_secret_name = aws_secretsmanager_secret.grafana_admin.name
+    }
+  })
 
-  provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = "echo \"Checking if MySQL secret exists in region ${var.region}...\"; if aws secretsmanager describe-secret --secret-id \"${var.secret_prefix}/mysql\" --region ${var.region} 2>/dev/null; then echo \"Secret exists, force deleting...\"; aws secretsmanager delete-secret --secret-id \"${var.secret_prefix}/mysql\" --force-delete-without-recovery --region ${var.region}; echo \"Waiting for deletion to complete (15s)...\"; sleep 15; else echo \"Secret doesn't exist, proceeding with creation...\"; fi"
-  }
+  depends_on = [
+    helm_release.external_secrets
+  ]
 }
 
-resource "aws_secretsmanager_secret" "mysql" {
-  name        = "${var.secret_prefix}/mysql"
-  description = "MySQL credentials for EKS application"
-  
-  tags = var.tags
-  
-  depends_on = [null_resource.manage_mysql_secret]
+# Generate random suffixes for secrets
+resource "random_string" "mysql_app_user_suffix" {
+  length  = 6
+  special = false
+  upper   = false
 }
 
-resource "aws_secretsmanager_secret_version" "mysql" {
-  secret_id     = aws_secretsmanager_secret.mysql.id
+resource "random_string" "weather_api_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
+resource "random_string" "slack_webhook_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
+resource "random_string" "grafana_admin_suffix" {
+  length  = 6
+  special = false
+  upper   = false
+}
+
+# --- MySQL App User Secret ---
+resource "aws_secretsmanager_secret" "mysql_app_user" {
+  name        = "${var.secret_prefix}/mysql-app-user-${random_string.mysql_app_user_suffix.result}"
+  description = "MySQL application user credentials for EKS application"
+  
+  tags = merge(var.tags, {
+    status = "active"
+  })
+}
+
+resource "random_password" "mysql_app_user_password" {
+  count   = 1
+  length  = 16
+  special = false
+}
+
+resource "aws_secretsmanager_secret_version" "mysql_app_user" {
+  secret_id     = aws_secretsmanager_secret.mysql_app_user.id
   secret_string = jsonencode({
     username = "app_user"
-    password = var.generate_random_password ? random_password.mysql[0].result : var.mysql_password
+    password = random_password.mysql_app_user_password[0].result
     host     = "mysql.data.svc.cluster.local"
     port     = "3306"
     database = "app_db"
   })
 }
 
-resource "random_password" "mysql" {
-  count   = var.generate_random_password ? 1 : 0
-  length  = 16
-  special = false
-}
-
-resource "null_resource" "manage_weather_api_secret" {
-  # Trigger on any change to the secret name or content
+# Handle lifecycle management for MySQL App User Secret
+resource "null_resource" "mysql_app_user_tag_cleanup" {
   triggers = {
-    # The full secret name including the region-specific prefix
-    secret_name = "${var.secret_prefix}/weather-api"
-    api_key = var.weather_api_key
-    region = var.region
+    secret_arn = aws_secretsmanager_secret.mysql_app_user.arn
+    secret_name = aws_secretsmanager_secret.mysql_app_user.name
+    aws_region = var.aws_region
   }
 
+  # When this resource is destroyed, update the tag to inactive
   provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = "echo \"Checking if Weather API secret exists in region ${var.region}...\"; if aws secretsmanager describe-secret --secret-id \"${var.secret_prefix}/weather-api\" --region ${var.region} 2>/dev/null; then echo \"Secret exists, force deleting...\"; aws secretsmanager delete-secret --secret-id \"${var.secret_prefix}/weather-api\" --force-delete-without-recovery --region ${var.region}; echo \"Waiting for deletion to complete (15s)...\"; sleep 15; else echo \"Secret doesn't exist, proceeding with creation...\"; fi"
+    when    = destroy
+    command = <<-EOT
+      aws secretsmanager tag-resource \
+        --secret-id ${self.triggers.secret_name} \
+        --tags Key=status,Value=inactive \
+        --region ${self.triggers.aws_region}
+      echo "Updated tag on ${self.triggers.secret_name} to status=inactive"
+    EOT
   }
 }
 
+# --- Weather API Secret ---
 resource "aws_secretsmanager_secret" "weather_api" {
-  name        = "${var.secret_prefix}/weather-api"
+  name        = "${var.secret_prefix}/weather-api-${random_string.weather_api_suffix.result}"
   description = "Weather API key for EKS application"
   
-  tags = var.tags
-  
-  depends_on = [null_resource.manage_weather_api_secret]
+  tags = merge(var.tags, {
+    status = "active"
+  })
 }
 
 resource "aws_secretsmanager_secret_version" "weather_api" {
@@ -176,28 +224,35 @@ resource "aws_secretsmanager_secret_version" "weather_api" {
   })
 }
 
-resource "null_resource" "manage_slack_webhook_secret" {
-  # Trigger on any change to the secret name or content
+# Handle lifecycle management for Weather API Secret
+resource "null_resource" "weather_api_tag_cleanup" {
   triggers = {
-    # The full secret name including the region-specific prefix
-    secret_name = "${var.secret_prefix}/slack-webhook"
-    webhook_url = var.slack_webhook_url
-    region = var.region
+    secret_arn = aws_secretsmanager_secret.weather_api.arn
+    secret_name = aws_secretsmanager_secret.weather_api.name
+    aws_region = var.aws_region
   }
 
+  # When this resource is destroyed, update the tag to inactive
   provisioner "local-exec" {
-    interpreter = ["/bin/bash", "-c"]
-    command     = "echo \"Checking if Slack Webhook secret exists in region ${var.region}...\"; if aws secretsmanager describe-secret --secret-id \"${var.secret_prefix}/slack-webhook\" --region ${var.region} 2>/dev/null; then echo \"Secret exists, force deleting...\"; aws secretsmanager delete-secret --secret-id \"${var.secret_prefix}/slack-webhook\" --force-delete-without-recovery --region ${var.region}; echo \"Waiting for deletion to complete (15s)...\"; sleep 15; else echo \"Secret doesn't exist, proceeding with creation...\"; fi"
+    when    = destroy
+    command = <<-EOT
+      aws secretsmanager tag-resource \
+        --secret-id ${self.triggers.secret_name} \
+        --tags Key=status,Value=inactive \
+        --region ${self.triggers.aws_region}
+      echo "Updated tag on ${self.triggers.secret_name} to status=inactive"
+    EOT
   }
 }
 
+# --- Slack Webhook Secret ---
 resource "aws_secretsmanager_secret" "slack_webhook" {
-  name        = "${var.secret_prefix}/slack-webhook"
+  name        = "${var.secret_prefix}/slack-webhook-${random_string.slack_webhook_suffix.result}"
   description = "Slack webhook URL for Alertmanager notifications"
   
-  tags = var.tags
-  
-  depends_on = [null_resource.manage_slack_webhook_secret]
+  tags = merge(var.tags, {
+    status = "active"
+  })
 }
 
 resource "aws_secretsmanager_secret_version" "slack_webhook" {
@@ -207,32 +262,149 @@ resource "aws_secretsmanager_secret_version" "slack_webhook" {
   })
 }
 
-# REMOVE the kubectl_manifest resource for syncing mysql secret
-# resource "kubectl_manifest" "mysql_external_secret" {
-#   yaml_body = templatefile("${path.module}/templates/externalsecret-mysql.yaml", {
-#     name        = "mysql-secrets"
-#     namespace   = "default" # This was syncing to the wrong namespace
-#     secret_name = aws_secretsmanager_secret.mysql.name
-#   })
-#
-#   depends_on = [
-#     kubectl_manifest.secretstore,
-#     aws_secretsmanager_secret_version.mysql
-#   ]
-# }
+# Handle lifecycle management for Slack Webhook Secret
+resource "null_resource" "slack_webhook_tag_cleanup" {
+  triggers = {
+    secret_arn = aws_secretsmanager_secret.slack_webhook.arn
+    secret_name = aws_secretsmanager_secret.slack_webhook.name
+    aws_region = var.aws_region
+  }
 
-# REMOVE the kubectl_manifest resource for syncing weather api secret to default ns
-# resource "kubectl_manifest" "weather_api_external_secret" {
-#   yaml_body = templatefile("${path.module}/templates/externalsecret-weather.yaml", {
-#     name        = "weather-api-secrets"
-#     namespace   = "default" # This was syncing to the wrong namespace
-#     secret_name = aws_secretsmanager_secret.weather_api.name
-#   })
-#
-#   depends_on = [
-#     kubectl_manifest.secretstore,
-#     aws_secretsmanager_secret_version.weather_api
-#   ]
-# }
+  # When this resource is destroyed, update the tag to inactive
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      aws secretsmanager tag-resource \
+        --secret-id ${self.triggers.secret_name} \
+        --tags Key=status,Value=inactive \
+        --region ${self.triggers.aws_region}
+      echo "Updated tag on ${self.triggers.secret_name} to status=inactive"
+    EOT
+  }
+}
+
+# --- Grafana Admin Secret ---
+resource "random_password" "grafana_admin" {
+  count   = 1
+  length  = 16
+  special = true
+}
+
+resource "aws_secretsmanager_secret" "grafana_admin" {
+  name        = "${var.secret_prefix}/grafana-admin-${random_string.grafana_admin_suffix.result}"
+  description = "Grafana admin credentials"
+  
+  tags = merge(var.tags, {
+    status = "active"
+  })
+}
+
+resource "aws_secretsmanager_secret_version" "grafana_admin" {
+  secret_id     = aws_secretsmanager_secret.grafana_admin.id
+  secret_string = jsonencode({
+    "admin-user" = "admin"
+    "admin-password" = random_password.grafana_admin[0].result
+  })
+}
+
+# Handle lifecycle management for Grafana Admin Secret
+resource "null_resource" "grafana_admin_tag_cleanup" {
+  triggers = {
+    secret_arn = aws_secretsmanager_secret.grafana_admin.arn
+    secret_name = aws_secretsmanager_secret.grafana_admin.name
+    aws_region = var.aws_region
+  }
+
+  # When this resource is destroyed, update the tag to inactive
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      aws secretsmanager tag-resource \
+        --secret-id ${self.triggers.secret_name} \
+        --tags Key=status,Value=inactive \
+        --region ${self.triggers.aws_region}
+      echo "Updated tag on ${self.triggers.secret_name} to status=inactive"
+    EOT
+  }
+}
 
 # Note: We will create ExternalSecret resources via Helm charts in the correct application namespaces instead.
+
+resource "kubectl_manifest" "secret_retrieval_job" {
+  yaml_body = <<-EOF
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: aws-secret-retriever
+      namespace: argocd
+      labels:
+        app.kubernetes.io/managed-by: terraform
+        app.kubernetes.io/part-of: external-secrets
+    spec:
+      template:
+        spec:
+          serviceAccountName: external-secrets
+          containers:
+          - name: aws-cli
+            image: amazon/aws-cli:latest
+            command:
+            - /bin/bash
+            - -c
+            - |
+              # Get the MySQL secret name
+              SECRET_NAME=$(aws secretsmanager list-secrets --filters Key=name,Values=${var.secret_prefix}/mysql-app-user --query "SecretList[0].Name" --output text)
+              
+              # Create ConfigMap with the secret name
+              cat > /tmp/configmap.yaml << EOL
+              apiVersion: v1
+              kind: ConfigMap
+              metadata:
+                name: mysql-secret-name
+                namespace: data
+                labels:
+                  app.kubernetes.io/managed-by: terraform
+                  app.kubernetes.io/part-of: external-secrets
+              data:
+                aws-secret-name: "$SECRET_NAME"
+              EOL
+              
+              # Install kubectl
+              curl -LO "https://dl.k8s.io/release/v1.27.0/bin/linux/amd64/kubectl"
+              chmod +x kubectl
+              mv kubectl /usr/local/bin/
+              
+              # Apply the ConfigMap
+              kubectl apply -f /tmp/configmap.yaml
+            env:
+            - name: AWS_REGION
+              value: ${var.aws_region}
+          restartPolicy: OnFailure
+      backoffLimit: 3
+  EOF
+
+  depends_on = [
+    helm_release.external_secrets,
+    aws_secretsmanager_secret.mysql_app_user
+  ]
+}
+
+resource "kubectl_manifest" "secret_prefixes_configmap" {
+  yaml_body = yamlencode({
+    apiVersion = "v1"
+    kind = "ConfigMap"
+    metadata = {
+      name = "aws-secret-prefixes"
+      namespace = "external-secrets"
+    }
+    data = {
+      mysql_secret_prefix = "${var.secret_prefix}/mysql-app-user"
+      weather_api_prefix = "${var.secret_prefix}/weather-api"
+      slack_webhook_prefix = "${var.secret_prefix}/slack-webhook"
+      grafana_admin_prefix = "${var.secret_prefix}/grafana-admin"
+    }
+  })
+
+  depends_on = [
+    helm_release.external_secrets
+  ]
+}

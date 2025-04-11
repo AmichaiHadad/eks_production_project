@@ -3,8 +3,8 @@ variable "cluster_name" {
   type        = string
 }
 
-variable "region" {
-  description = "AWS region"
+variable "aws_region" {
+  description = "The AWS region to deploy resources in"
   type        = string
 }
 
@@ -38,7 +38,7 @@ variable "parameter_prefix" {
 variable "chart_version" {
   description = "Version of the External Secrets Helm chart"
   type        = string
-  default     = "0.9.9"
+  default     = "0.15.1"
 }
 
 variable "mysql_password" {

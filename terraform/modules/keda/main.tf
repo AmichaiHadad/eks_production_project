@@ -58,6 +58,11 @@ resource "helm_release" "keda" {
   namespace  = "keda"
   create_namespace = true
 
+  set {
+    name = "crds.create"
+    value = "false"
+  }
+
   values = [
     templatefile("${path.module}/templates/values.yaml", {
       iam_role_arn = aws_iam_role.keda_controller.arn

@@ -1,0 +1,186 @@
+flowchart TB
+    %% Diagram Style Definitions
+    classDef aws fill:#FF9900,stroke:#232F3E,color:#232F3E
+    classDef eks fill:#FF9900,stroke:#232F3E,color:#232F3E,stroke-width:2px
+    classDef k8s fill:#326CE5,stroke:#326CE5,color:white
+    classDef argo fill:#EF7B4D,stroke:#EF7B4D,color:white
+    classDef db fill:#3C873A,stroke:#3C873A,color:white
+    classDef elastic fill:#005571,stroke:#005571,color:white
+    classDef monitoring fill:#E6522C,stroke:#E6522C,color:white
+    classDef security fill:#D82C20,stroke:#D82C20,color:white
+    classDef cicd fill:#2496ED,stroke:#2496ED,color:white
+    classDef vpc fill:#248F73,stroke:#248F73,color:white
+    classDef service fill:#6BA539,stroke:#6BA539,color:white
+    
+    %% GitHub and CI/CD Section
+    GH["GitHub Repository"]
+    GHA["GitHub Actions<br>CI/CD Pipeline"]
+    ECR_EAST["ECR Repository<br>us-east-1"]
+    ECR_WEST["ECR Repository<br>us-west-2"]
+    
+    GH --> GHA
+    GHA --> ECR_EAST
+    GHA --> ECR_WEST
+    GHA --> GH
+    
+    %% US-EAST-1 Region
+    VPC_EAST["VPC (10.10.0.0/16)"]
+    IGW_EAST["Internet Gateway"]
+    NAT_EAST["NAT Gateways"]
+    SUBNETS_EAST["Public & Private Subnets"]
+    
+    R53_EAST["Route 53<br>blizzard.co.il"]
+    ACM_EAST["ACM Certificate<br>*.blizzard.co.il"]
+    
+    %% EKS Cluster East
+    CP_EAST["EKS Control Plane<br>v1.29"]
+    MNG_EAST["Management<br>Node Group"]
+    SNG_EAST["Services<br>Node Group"]
+    DNG_EAST["Data<br>Node Group"]
+    MON_NG_EAST["Monitoring<br>Node Group"]
+    
+    %% Management Plane Services
+    ARGO_EAST["ArgoCD"]
+    AWS_LB_EAST["AWS Load Balancer<br>Controller"]
+    EXTERNAL_DNS_EAST["External DNS"]
+    EXT_SECRETS_EAST["External Secrets<br>Operator"]
+    KARPENTER_EAST["Karpenter"]
+    KEDA_EAST["KEDA"]
+    
+    %% Application Services
+    PYTHON_APP_EAST["Python Web App<br>Deployment"]
+    APP_HPA_EAST["HPA/KEDA<br>ScaledObject"]
+    APP_SVC_EAST["App Service<br>(ClusterIP)"]
+    APP_ING_EAST["App Ingress<br>(ALB)"]
+    
+    %% Data Services
+    MYSQL_EAST["MySQL<br>StatefulSet"]
+    MYSQL_PVC_EAST["MySQL PVC<br>EBS Volume"]
+    MYSQL_SVC_EAST["MySQL Service<br>(ClusterIP)"]
+    
+    ES_EAST["Elasticsearch<br>StatefulSet"]
+    ES_PVC_EAST["ES PVC<br>EBS Volumes"]
+    ES_SVC_EAST["ES Service<br>(ClusterIP)"]
+    
+    FLUENTD_EAST["Fluentd<br>DaemonSet"]
+    
+    %% Monitoring Services
+    PROM_EAST["Prometheus"]
+    GRAFANA_EAST["Grafana"]
+    ALERTMANAGER_EAST["Alertmanager"]
+    MYSQL_EXP_EAST["MySQL Exporter"]
+    ES_EXP_EAST["Elasticsearch<br>Exporter"]
+    
+    %% Security Components
+    NET_POL_EAST["Network Policies"]
+    TRIVY_EAST["Trivy Operator"]
+    POLARIS_EAST["Polaris"]
+    
+    %% AWS Services outside EKS
+    KMS_EAST["KMS Keys"]
+    SM_EAST["Secrets Manager"]
+    CW_EAST["CloudWatch Logs"]
+    
+    %% US-WEST-2 Region (Simplified)
+    VPC_WEST["VPC (10.20.0.0/16)"]
+    CP_WEST["EKS Control Plane<br>v1.29"]
+    NODES_WEST["Node Groups"]
+    SERVICES_WEST["Cluster Services"]
+    APP_WEST["Python Web App"]
+    
+    %% Global Route 53
+    R53_GLOBAL["Global Route 53<br>blizzard.co.il"]
+    
+    %% Terragrunt and IaC
+    TERRAFORM["Terraform/Terragrunt<br>IaC"]
+    
+    %% Connections - East Region
+    VPC_EAST --- IGW_EAST
+    VPC_EAST --- NAT_EAST
+    VPC_EAST --- SUBNETS_EAST
+    
+    CP_EAST --- MNG_EAST
+    CP_EAST --- SNG_EAST
+    CP_EAST --- DNG_EAST
+    CP_EAST --- MON_NG_EAST
+    
+    MNG_EAST --- ARGO_EAST
+    MNG_EAST --- AWS_LB_EAST
+    MNG_EAST --- EXTERNAL_DNS_EAST
+    MNG_EAST --- EXT_SECRETS_EAST
+    MNG_EAST --- KARPENTER_EAST
+    MNG_EAST --- KEDA_EAST
+    
+    SNG_EAST --- PYTHON_APP_EAST
+    SNG_EAST --- APP_HPA_EAST
+    SNG_EAST --- APP_SVC_EAST
+    SNG_EAST --- APP_ING_EAST
+    
+    DNG_EAST --- MYSQL_EAST
+    DNG_EAST --- ES_EAST
+    DNG_EAST --- FLUENTD_EAST
+    
+    MYSQL_EAST --- MYSQL_PVC_EAST
+    MYSQL_EAST --- MYSQL_SVC_EAST
+    ES_EAST --- ES_PVC_EAST
+    ES_EAST --- ES_SVC_EAST
+    FLUENTD_EAST --> ES_SVC_EAST
+    
+    MON_NG_EAST --- PROM_EAST
+    MON_NG_EAST --- GRAFANA_EAST
+    MON_NG_EAST --- ALERTMANAGER_EAST
+    MON_NG_EAST --- MYSQL_EXP_EAST
+    MON_NG_EAST --- ES_EXP_EAST
+    
+    MNG_EAST --- NET_POL_EAST
+    MNG_EAST --- TRIVY_EAST
+    MNG_EAST --- POLARIS_EAST
+    
+    ARGO_EAST --> PYTHON_APP_EAST
+    ARGO_EAST --> MYSQL_EAST
+    ARGO_EAST --> ES_EAST
+    ARGO_EAST --> PROM_EAST
+    
+    PYTHON_APP_EAST --> MYSQL_SVC_EAST
+    PYTHON_APP_EAST --> ES_SVC_EAST
+    
+    KEDA_EAST --> APP_HPA_EAST
+    KARPENTER_EAST --> SNG_EAST
+    
+    EXT_SECRETS_EAST --> SM_EAST
+    EXTERNAL_DNS_EAST --> R53_EAST
+    
+    AWS_LB_EAST --> APP_ING_EAST
+    APP_ING_EAST --> IGW_EAST
+    APP_ING_EAST --- ACM_EAST
+    
+    ECR_EAST --> PYTHON_APP_EAST
+    
+    R53_EAST --> APP_ING_EAST
+    
+    %% Connections - West Region (Simplified)
+    CP_WEST --- NODES_WEST
+    NODES_WEST --- SERVICES_WEST
+    NODES_WEST --- APP_WEST
+    ECR_WEST --> APP_WEST
+    
+    %% Global Connections
+    R53_GLOBAL --> R53_EAST
+    R53_GLOBAL --- R53_WEST
+    
+    TERRAFORM --> VPC_EAST
+    TERRAFORM --> VPC_WEST
+    GH --> TERRAFORM
+    
+    %% Class assignments
+    class GH,GHA,TERRAFORM cicd;
+    class ECR_EAST,ECR_WEST,KMS_EAST,CW_EAST,R53_EAST,R53_GLOBAL,ACM_EAST aws;
+    class CP_EAST,CP_WEST eks;
+    class MNG_EAST,SNG_EAST,DNG_EAST,MON_NG_EAST,NODES_WEST,APP_HPA_EAST,AWS_LB_EAST,EXTERNAL_DNS_EAST,KARPENTER_EAST,KEDA_EAST k8s;
+    class ARGO_EAST argo;
+    class MYSQL_EAST,MYSQL_SVC_EAST db;
+    class ES_EAST,ES_SVC_EAST elastic;
+    class PROM_EAST,GRAFANA_EAST,ALERTMANAGER_EAST,MYSQL_EXP_EAST,ES_EXP_EAST monitoring;
+    class EXT_SECRETS_EAST,NET_POL_EAST,TRIVY_EAST,POLARIS_EAST,SM_EAST security;
+    class VPC_EAST,VPC_WEST,IGW_EAST,NAT_EAST,SUBNETS_EAST vpc;
+    class PYTHON_APP_EAST,APP_SVC_EAST,APP_ING_EAST,APP_WEST,FLUENTD_EAST,SERVICES_WEST service;

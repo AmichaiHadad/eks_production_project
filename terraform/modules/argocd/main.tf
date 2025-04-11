@@ -86,6 +86,7 @@ resource "kubectl_manifest" "applicationset" {
     target_namespace = var.application_sets[count.index].target_namespace
     auto_sync    = var.application_sets[count.index].auto_sync
     self_heal    = var.application_sets[count.index].self_heal
+    values      = var.application_sets[count.index].values
   })
   depends_on = [
     helm_release.argocd

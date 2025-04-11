@@ -43,8 +43,8 @@ variable "security_group_ids" {
   type        = list(string)
 }
 
-variable "region" {
-  description = "AWS region"
+variable "aws_region" {
+  description = "The AWS region to deploy resources in"
   type        = string
 }
 
