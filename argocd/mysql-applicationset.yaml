@@ -1,0 +1,82 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: mysql
+  namespace: argocd
+spec:
+  generators:
+  - list:
+      elements:
+      - cluster: eks-blizzard-us-east-1
+        region: us-east-1
+        url: https://kubernetes.default.svc
+        # Removed secret name variables - ESO will look them up directly
+  template:
+    metadata:
+      name: 'mysql-{{cluster}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/AmichaiHadad/eks_production_project.git # Make sure this is your repo URL
+        targetRevision: HEAD
+        path: helm-chart/mysql
+        helm:
+          values: |
+            global:
+              storageClass: "gp2" # Or your preferred storage class
+            # Configure auth via environment variables sourced from ESO-synced secrets
+            auth:
+              createDatabase: true
+              database: "app_db"
+              username: "app_user"
+            primary:
+              persistence:
+                enabled: true
+                size: 8Gi
+              serviceAccount:
+                create: false 
+                name: mysql-sa
+              # Define environment variables to pass secrets
+              extraEnvVars:
+              - name: MYSQL_ROOT_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: mysql-root-credential # K8s secret created by external-secrets TF module
+                    key: password # Key within that K8s secret
+              - name: MYSQL_PASSWORD
+                valueFrom:
+                  secretKeyRef:
+                    name: mysql-app-credential # K8s secret created by external-secrets TF module
+                    key: password # Key within that K8s secret
+            secondary:
+              replicaCount: 0
+            replication:
+              enabled: false # Explicitly disable replication
+            
+            # --- Pod Security Context (Example - Adjust as needed) ---
+            # Make sure security context doesn't conflict with permissions needed
+            # For example, sometimes restricting runAsUser/fsGroup can cause issues
+            # primary:
+            #   podSecurityContext:
+            #     enabled: true
+            #     fsGroup: 1001
+            #   containerSecurityContext:
+            #     enabled: true
+            #     runAsUser: 1001
+
+      destination:
+        server: '{{url}}'
+        namespace: data # Deploy MySQL into the data namespace
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+        - CreateNamespace=true # Ensures the 'data' namespace exists
+        - ServerSideApply=true # Recommended for newer K8s versions
+      ignoreDifferences: # Ignore fields managed by operators like ESO
+      - group: ""
+        kind: Secret
+        jsonPointers:
+        - /data
+        # Add other ignores if necessary 

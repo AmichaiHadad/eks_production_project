@@ -1,0 +1,322 @@
+# Cluster configuration
+clusterName: eks-blizzard-us-east-1
+
+# Global configuration
+global:
+  region: us-east-1
+
+# Secret names - placeholder/defaults, overridden where necessary
+secretPrefix: eks-blizzard
+slackWebhookSecretName: ""  # Still likely overridden by Argo CD application
+
+# Alertmanager webhook secret is expected to be managed externally
+# Either created manually or via External Secrets
+# The secret should be named 'alertmanager-slack-webhook' in the monitoring namespace
+# with a key 'slack_webhook_url' containing the actual webhook URL
+# DO NOT put webhook URLs in this file or templates
+
+# Monitoring stack configuration
+kube-prometheus-stack:
+  # Global settings
+  global:
+    rbac:
+      create: true
+      
+  # Grafana configuration (Consolidated)
+  grafana:
+    enabled: true
+    nodeSelector:
+      node-role: monitoring
+    tolerations:
+      - key: monitoring
+        value: "true"
+        effect: NoSchedule
+    # Instead of using adminPassword directly, use an existing secret
+    admin:
+      existingSecret: "grafana-admin-credentials"
+      userKey: "admin-user"
+      passwordKey: "admin-password"
+    persistence:
+      enabled: true
+      storageClassName: gp2
+      size: 10Gi
+    ingress:
+      enabled: false
+    sidecar:
+      dashboards:
+        enabled: true
+        searchNamespace: ALL
+    # Add Elasticsearch as additional datasource
+    additionalDataSources:
+      - name: Elasticsearch
+        type: elasticsearch
+        url: http://elasticsearch.data.svc.cluster.local:9200
+        access: proxy
+        database: k8s-logs-*
+        isDefault: false
+        jsonData:
+          timeField: "@timestamp"
+          esVersion: 8
+          logLevelField: level
+          logMessageField: log
+    # Disable pre-installed dashboards to avoid label issues
+    # We'll use custom dashboards via ConfigMaps instead
+    dashboards: {}
+  
+  # Prometheus Operator configuration
+  prometheusOperator:
+    enabled: true
+    nodeSelector:
+      node-role: monitoring
+    tolerations:
+      - key: monitoring
+        value: "true"
+        effect: NoSchedule
+    admissionWebhooks:
+      enabled: true
+      patch:
+        nodeSelector:
+          node-role: monitoring
+        tolerations:
+          - key: monitoring
+            value: "true"
+            effect: NoSchedule
+    createCustomResource: false
+  
+  # Prometheus configuration
+  prometheus:
+    enabled: true
+    serviceAccount:
+      create: true
+    # Add node placement for Prometheus pods
+    nodeSelector:
+      node-role: monitoring
+    tolerations:
+      - key: monitoring
+        value: "true"
+        effect: NoSchedule
+    prometheusSpec:
+      replicas: 1
+      retention: 15d
+      resources:
+        requests:
+          cpu: 500m
+          memory: 2Gi
+        limits:
+          cpu: 1000m
+          memory: 4Gi
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: gp2
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+      # Additional scrape configurations for MySQL and Elasticsearch
+      additionalScrapeConfigs:
+        - job_name: mysql-exporter
+          kubernetes_sd_configs:
+            - role: endpoints
+              namespaces:
+                names:
+                  - monitoring
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_service_name]
+              regex: prometheus-mysql-exporter
+              action: keep
+        - job_name: elasticsearch-exporter
+          kubernetes_sd_configs:
+            - role: endpoints
+              namespaces:
+                names:
+                  - monitoring
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_service_name]
+              regex: prometheus-elasticsearch-exporter
+              action: keep
+        - job_name: keda-metrics-apiserver
+          kubernetes_sd_configs:
+            - role: endpoints
+              namespaces:
+                names:
+                  - keda
+          relabel_configs:
+            - source_labels: [__meta_kubernetes_service_name]
+              regex: keda-metrics-apiserver
+              action: keep
+      
+      # Alerting rules
+      ruleSelector: {}
+      ruleNamespaceSelector: {}
+      ruleSelectorNilUsesHelmValues: true
+      serviceMonitorSelector: {}
+      serviceMonitorNamespaceSelector: {}
+      serviceMonitorSelectorNilUsesHelmValues: true
+      podMonitorSelector: {}
+      podMonitorNamespaceSelector: {}
+      podMonitorSelectorNilUsesHelmValues: true
+  
+  # Alertmanager configuration
+  alertmanager:
+    enabled: true
+    # Add node placement for Alertmanager pods
+    nodeSelector:
+      node-role: monitoring
+    tolerations:
+      - key: monitoring
+        value: "true"
+        effect: NoSchedule
+    config:
+      global:
+        resolve_timeout: 5m
+      route:
+        group_by: ['alertname', 'job']
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        receiver: 'null'
+        routes:
+          - match:
+              severity: critical
+            receiver: 'null'
+      receivers:
+        - name: 'null'
+      inhibit_rules:
+        - source_match:
+            severity: 'critical'
+          target_match:
+            severity: 'warning'
+          equal: ['alertname', 'namespace']
+    # Enable alertmanager config CRD
+    alertmanagerConfigSelector:
+      matchLabels: {}
+    alertmanagerConfiguration:
+      enabled: true
+    alertmanagerSpec:
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: gp2
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 10Gi
+  
+  # Kube state metrics
+  kubeStateMetrics:
+    enabled: true
+    nodeSelector:
+      node-role: monitoring
+    tolerations:
+      - key: monitoring
+        value: "true"
+        effect: NoSchedule
+  
+  # Node exporter
+  nodeExporter:
+    enabled: true
+    tolerations:
+      - operator: Exists
+  
+  # Thanos ruler for long-term query
+  thanosRuler:
+    enabled: false
+  
+  # Default values for Prometheus rules
+  defaultRules:
+    create: true
+    appNamespace:
+      rule:
+        enabled: true
+    rules:
+      alertmanager: true
+      etcd: true
+      general: true
+      k8s: true
+      kubeApiserver: true
+      kubePrometheusNodeAlerting: true
+      kubePrometheusNodeRecording: true
+      kubernetesAbsent: true
+      kubernetesApps: true
+      kubernetesResources: true
+      kubernetesStorage: true
+      kubernetesSystem: true
+      kubeScheduler: true
+      network: true
+      node: true
+      prometheus: true
+      time: true
+  
+  # Disable any external-dns components in kube-prometheus-stack
+  externalDns:
+    enabled: false
+  
+  external-dns:
+    enabled: false
+
+# Explicitly disable external-dns at the root level
+# This ensures we're using the cluster-wide external-dns deployed by terragrunt
+externalDns:
+  enabled: false
+
+external-dns:
+  enabled: false
+
+# MySQL exporter
+prometheus-mysql-exporter:
+  mysql:
+    host: "mysql.data"
+    port: 3306
+    user: "prometheus"
+    pass: "prometheus-exporter-password-placeholder"  # Will be overridden by External Secrets
+    db: "app_db"
+  
+  nodeSelector:
+    node-role: monitoring
+  
+  tolerations:
+    - key: monitoring
+      value: "true"
+      effect: NoSchedule
+  
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  
+  serviceMonitor:
+    enabled: true
+
+# Elasticsearch exporter
+prometheus-elasticsearch-exporter:
+  es:
+    uri: http://elasticsearch.data.svc.cluster.local:9200
+    all: true
+    indices: true
+    indices_settings: true
+    cluster_settings: true
+    ssl:
+      enabled: false
+  
+  nodeSelector:
+    node-role: monitoring
+  
+  tolerations:
+    - key: monitoring
+      value: "true"
+      effect: NoSchedule
+  
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  
+  serviceMonitor:
+    enabled: true

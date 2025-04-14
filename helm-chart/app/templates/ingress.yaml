@@ -1,0 +1,41 @@
+{{- if .Values.ingress.enabled -}}
+{{- $fullName := include "app.fullname" . -}}
+{{- $svcPort := .Values.service.port -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullName }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+  annotations:
+    # Static annotations from values.yaml using toYaml
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    # Conditionally add the certificate ARN annotation if provided
+    {{- if .Values.ingress.acmCertificateArn }}
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.acmCertificateArn | quote }}
+    {{- end }}
+    # Explicitly add hostname annotation for ExternalDNS
+    external-dns.alpha.kubernetes.io/hostname: {{ index .Values.ingress.hosts 0 "host" | quote }}
+    external-dns.alpha.kubernetes.io/ttl: "300" # Optional: Set DNS record TTL
+spec:
+  {{- if .Values.ingress.className }}
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ $fullName }}
+                port:
+                  number: {{ $svcPort }}
+          {{- end }}
+    {{- end }}
+{{- end }}

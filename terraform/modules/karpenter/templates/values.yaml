@@ -1,0 +1,47 @@
+replicas: 1
+
+serviceAccount:
+  create: true
+  name: karpenter-controller
+  annotations:
+    eks.amazonaws.com/role-arn: ${iam_role_arn}
+
+controller:
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  env:
+    - name: CLUSTER_NAME
+      value: ${cluster_name}
+
+settings:
+  aws:
+    clusterName: ${cluster_name}
+
+nodeTemplate:
+  subnetSelector:
+    kubernetes.io/cluster/${cluster_name}: owned
+  securityGroupSelector:
+    kubernetes.io/cluster/${cluster_name}: owned
+
+# Enable pod affinity to run on management node group
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-role
+          operator: In
+          values:
+          - management
+
+# Moving tolerations outside affinity block
+tolerations:
+- key: "management"
+  operator: "Equal"
+  value: "true"
+  effect: "NoSchedule"

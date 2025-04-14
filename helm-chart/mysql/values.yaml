@@ -1,0 +1,58 @@
+# MySQL Helm chart values
+mysql:
+  architecture: standalone # Use StatefulSet
+
+  # Consolidate all primary node settings under this block
+  primary:
+    nodeSelector:
+      node-role: data
+    tolerations:
+      - key: role
+        value: data
+        effect: NoSchedule
+    resources:
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 1Gi
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 20Gi
+    # Use default probes which rely on internal root/probe user
+    livenessProbe:
+      enabled: true
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+      successThreshold: 1
+    readinessProbe:
+      enabled: true
+      initialDelaySeconds: 5
+      periodSeconds: 10
+      timeoutSeconds: 1
+      failureThreshold: 3
+      successThreshold: 1
+    labels:
+      role: mysql-primary
+    
+  # Database configuration
+  auth:
+    # Keep database/user settings if the chart needs them for setup scripts
+    createDatabase: true
+    database: "app_db"
+    username: "app_user"
+
+  # Service configurations
+  service:
+    type: ClusterIP
+    port: 3306
+
+  # Top-level security context
+  securityContext:
+    enabled: true
+    fsGroup: 1001
+    runAsUser: 1001

@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "app.fullname" . }}
+  labels:
+    {{- include "app.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "app.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "app.selectorLabels" . | nindent 8 }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 5000
+              protocol: TCP
+          env:
+            {{- range .Values.env }}
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+            {{- end }}
+            # Mount weather API key using values passed from ApplicationSet
+            - name: WEATHER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.weatherApiKeySecretName | quote }}
+                  key: {{ .Values.secrets.weatherApiKeySecretKey | quote }}
+            # Mount DB credentials using values passed from ApplicationSet
+            - name: DB_HOST
+              value: {{ printf "%s.%s.svc.cluster.local" .Values.db.serviceName .Values.db.namespace | quote }}
+            - name: DB_PORT
+              value: "3306" # Standard MySQL port
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.mysqlCredsSecretName | quote }}
+                  key: {{ .Values.secrets.mysqlUsernameSecretKey | quote }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.mysqlCredsSecretName | quote }}
+                  key: {{ .Values.secrets.mysqlPasswordSecretKey | quote }}
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.mysqlCredsSecretName | quote }}
+                  key: {{ .Values.secrets.mysqlDatabaseSecretKey | quote }}
+            # Downward API for pod name (container ID)
+            - name: CONTAINER_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

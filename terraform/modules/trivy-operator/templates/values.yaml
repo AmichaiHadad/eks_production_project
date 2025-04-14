@@ -1,0 +1,77 @@
+# Default values for the Trivy Operator Helm chart
+
+# Service account configuration
+serviceAccount:
+  create: true
+  name: ${service_account_name}
+  annotations:
+    # Ensure IRSA annotation is present and uses the variable
+    eks.amazonaws.com/role-arn: ${iam_role_arn}
+
+# Operator settings
+operator:
+  replicas: 1
+  # Ensure operator runs on management nodes using variables
+  nodeSelector: ${node_selector}
+  tolerations: ${tolerations} # Use variable passed from module
+
+  # Enable relevant scanners (matching project goals and existing settings)
+  vulnerabilityScannerEnabled: true
+  configAuditScannerEnabled: true
+  rbacAssessmentScannerEnabled: true
+  infraAssessmentScannerEnabled: true # Explicitly enabled
+  exposedSecretScannerEnabled: true
+  clusterComplianceEnabled: true # Keep default cluster compliance enabled
+
+  # Resource requests and limits for the operator pod
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Node Collector Settings (Part of infra assessment)
+# These should tolerate all nodes to collect info from control-plane/data nodes if needed
+nodeCollector:
+  tolerations:
+    - operator: "Exists" # Universal toleration
+
+# Settings specifically for Jobs created by the operator (Scans etc.)
+trivyOperator:
+  # Don't force a specific node selector for jobs, let them run where the workload is
+  scanJobNodeSelector: {}
+  # Apply UNIVERSAL toleration to all scan jobs created by the operator
+  scanJobTolerations:
+    - operator: "Exists" # Ensure jobs can run on tainted nodes (data, monitoring etc.)
+  # Only record failed checks for config/rbac audits
+  reportRecordFailedChecksOnly: true
+
+# Trivy specific configurations
+trivy:
+  # Ignore vulnerabilities that are not yet fixed by the upstream vendor
+  ignoreUnfixed: true
+  # Only report vulnerabilities with these severities
+  severity: "CRITICAL,HIGH"
+
+# RBAC settings (managed by the chart)
+rbac:
+  create: true
+
+# Prometheus Integration
+# Disable built-in Prometheus (we use kube-prometheus-stack)
+# Enable ServiceMonitor for discovery by kube-prometheus-stack
+prometheus:
+  enabled: false # Disable built-in Prometheus metrics endpoint config
+  serviceMonitor:
+    enabled: true # Enable ServiceMonitor creation
+
+# Compliance report settings (use chart defaults for now)
+# compliance:
+#   specs:
+#     - k8s-cis-1.23
+#     - k8s-nsa-1.0
+#     - k8s-pss-baseline-0.1
+#     - k8s-pss-restricted-0.1
+#     # Consider adding eks-cis-1.4 if needed for EKS 1.29

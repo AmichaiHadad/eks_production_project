@@ -1,0 +1,65 @@
+replicaCount: 1
+
+# Pod securityContext
+securityContext:
+  runAsUser: 1000
+  fsGroup: 1000
+
+# Enable pod affinity to run on management node group
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-role
+          operator: In
+          values:
+          - management
+
+# Add tolerations for management nodes
+tolerations:
+- key: "management"
+  operator: "Equal"
+  value: "true"
+  effect: "NoSchedule"
+
+# Container resources
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+serviceAccount:
+  create: true
+  name: external-secrets
+  annotations:
+    eks.amazonaws.com/role-arn: ${role_arn}
+
+# Default securityContext for the controllers
+controllerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Default configuration for cert controller
+certController:
+  serviceAccount:
+    create: true
+    name: external-secrets-cert-controller
+
+# Default configuration for webhook
+webhook:
+  serviceAccount:
+    create: true
+    name: external-secrets-webhook
+
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s

@@ -1,0 +1,51 @@
+# Custom Elasticsearch chart values
+# Using official Elasticsearch image directly instead of Bitnami chart
+
+# No need for complex security configuration - using simple deployment with security disabled
+# as specified in Project_Master_Definition.md and implemented in templates/elasticsearch.yaml
+
+# Default to 3-Node cluster configuration for high availability
+# Each node has both master and data roles as per Project_Master_Definition.md
+# Can be overridden to 1 for simpler deployment
+replicas: 3
+# Discovery mode - can be set to "single-node" for simpler deployment
+discovery: "multi-node"
+image:
+  repository: docker.elastic.co/elasticsearch/elasticsearch
+  tag: 8.10.4
+
+# Resource configuration for ES nodes
+resources:
+  requests:
+    cpu: 500m
+    memory: 3Gi
+  limits:
+    cpu: 1
+    memory: 4Gi
+
+# Storage configuration
+storage:
+  storageClassName: gp2
+  size: 30Gi
+
+# Security settings - disabled as per solution in ClaudeProgress.md
+security:
+  enabled: false
+
+# Node placement
+nodeSelector:
+  node-role: data
+tolerations:
+  - effect: NoSchedule
+    key: role
+    value: data
+
+# Ingress configuration - DISABLED per project definition
+# Elasticsearch should only be accessible internally
+ingress:
+  enabled: false
+  
+# Service configuration - Use ClusterIP for internal access only
+service:
+  type: ClusterIP
+  port: 9200

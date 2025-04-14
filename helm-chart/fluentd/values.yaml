@@ -1,0 +1,129 @@
+# Fluentd Helm chart values
+fluentd:
+  # Fluentd configuration
+  configMapName: ""
+  
+  # Use DaemonSet to run on all nodes and configure environment variables
+  forwarder:
+    enabled: true
+    daemonset:
+      enabled: true
+    configMap: fluentd-forwarder
+    extraEnvVars:
+      - name: FLUENTD_CONF
+        value: "fluentd.conf"
+      - name: ELASTICSEARCH_HOST
+        value: "elasticsearch.data.svc.cluster.local"
+      - name: ELASTICSEARCH_PORT
+        value: "9200"
+      - name: ELASTICSEARCH_SCHEME
+        value: "http"
+    nodeSelector: {}
+    tolerations:
+      - operator: "Exists"
+  
+  # Disable aggregator deployment - we'll send logs directly to Elasticsearch
+  aggregator:
+    enabled: false
+  
+  # Configure Fluentd
+  configMap: |-
+    # Fluentd configuration
+    # HTTP input for health checks
+    <source>
+      @type http
+      port 9880
+      bind 0.0.0.0
+    </source>
+
+    # Handle health check endpoint explicitly
+    <match fluentd.healthcheck>
+      @type stdout
+    </match>
+    
+    # Handle the health check route
+    <filter fluentd.healthcheck>
+      @type record_transformer
+      enable_ruby true
+      <record>
+        ping pong
+      </record>
+    </filter>
+
+    # Container logs input
+    <source>
+      @type tail
+      path /var/log/containers/*.log
+      pos_file /opt/bitnami/fluentd/logs/containers.log.pos
+      tag kubernetes.*
+      read_from_head true
+      <parse>
+        @type json
+        time_format %Y-%m-%dT%H:%M:%S.%NZ
+      </parse>
+    </source>
+
+    # Add Kubernetes metadata
+    <filter kubernetes.**>
+      @type kubernetes_metadata
+    </filter>
+
+    # Detect exceptions in the log output
+    <filter kubernetes.**>
+      @type grep
+      <regexp>
+        key log
+        pattern (Exception|Error|error|ERROR|FAULT|Fault|fatal|FATAL)
+      </regexp>
+    </filter>
+
+    # Send logs to Elasticsearch
+    <match kubernetes.**>
+      @type elasticsearch
+      host "#{ENV['ELASTICSEARCH_HOST']}"
+      port "#{ENV['ELASTICSEARCH_PORT']}"
+      scheme "#{ENV['ELASTICSEARCH_SCHEME']}"
+      logstash_format true
+      logstash_prefix k8s-logs
+      include_tag_key true
+      tag_key @log_name
+      reconnect_on_error true
+      reload_on_failure true
+      reload_connections false
+      request_timeout 15s
+      log_es_400_reason true
+      with_transporter_log true
+      ssl_verify false
+      ssl_version TLSv1_2
+      # For Elasticsearch 8.x compatibility
+      suppress_type_name true
+      # Specify the compatible API version
+      default_elasticsearch_version 8
+      <buffer>
+        @type file
+        path /opt/bitnami/fluentd/logs/buffers/k8s
+        flush_thread_count 2
+        flush_interval 5s
+        chunk_limit_size 2M
+        queue_limit_length 32
+        retry_max_interval 30
+        retry_forever true
+      </buffer>
+    </match>
+  
+  # Resource allocations
+  resources:
+    limits:
+      cpu: 200m
+      memory: 400Mi
+    requests:
+      cpu: 100m
+      memory: 200Mi
+  
+  # RBAC settings
+  rbac:
+    create: true
+    
+  # Service account
+  serviceAccount:
+    create: true

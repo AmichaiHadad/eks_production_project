@@ -1,0 +1,60 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: app
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: app-us-east-1
+            cluster: eks-blizzard-us-east-1
+            url: https://kubernetes.default.svc
+            region: us-east-1
+            acm_certificate_arn: "arn:aws:acm:us-east-1:163459217187:certificate/4ff90f30-64f8-40e1-b1b3-8f13d5fac876"
+  template:
+    metadata:
+      name: 'app-{{region}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/AmichaiHadad/eks_production_project.git
+        path: helm-chart/app
+        targetRevision: main
+        helm:
+          valueFiles:
+            - values.yaml
+          parameters:
+            - name: image.repository
+              value: '163459217187.dkr.ecr.{{region}}.amazonaws.com/eks-blizzard/app'
+            - name: ingress.hosts[0].host
+              value: 'app-{{region}}.blizzard.co.il'
+            - name: region
+              value: '{{region}}'
+            - name: ingress.acmCertificateArn
+              value: '{{acm_certificate_arn}}'
+            - name: secrets.weatherApiKeySecretName
+              value: "weather-api-key"
+            - name: secrets.weatherApiKeySecretKey
+              value: "api-key"
+            - name: secrets.mysqlCredsSecretName
+              value: "mysql-app-credentials"
+            - name: secrets.mysqlPasswordSecretKey
+              value: "password"
+            - name: secrets.mysqlUsernameSecretKey
+              value: "username"
+            - name: secrets.mysqlDatabaseSecretKey
+              value: "database"
+            - name: db.serviceName
+              value: "mysql-{{cluster}}"
+            - name: db.namespace
+              value: "data"
+      destination:
+        server: '{{url}}'
+        namespace: app
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

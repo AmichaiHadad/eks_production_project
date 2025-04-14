@@ -1,0 +1,69 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: monitoring
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: monitoring-us-east-1
+            cluster: eks-blizzard-us-east-1
+            url: https://kubernetes.default.svc
+            region: us-east-1
+            # These will be populated by terragrunt outputs via ArgoCD module
+            slack_webhook_secret_name: "${slack_webhook_secret_name}"
+  template:
+    metadata:
+      name: '{{name}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/AmichaiHadad/eks_production_project.git
+        targetRevision: main
+        path: helm-chart/monitoring
+        helm:
+          valueFiles:
+            - values.yaml
+          parameters:
+            - name: kube-prometheus-stack.grafana.serviceMonitor.enabled
+              value: "true"
+            - name: externalDns.enabled
+              value: "false"
+            - name: kube-prometheus-stack.externalDns.enabled
+              value: "false"
+            - name: kube-prometheus-stack.external-dns.enabled
+              value: "false"
+            - name: clusterName
+              value: 'eks-blizzard-{{region}}'
+            - name: global.region
+              value: '{{region}}'
+            # Pass dynamic secret names to the chart
+            - name: slackWebhookSecretName
+              value: '{{slack_webhook_secret_name}}'
+            
+            # --- Configure Grafana Admin Secret --- 
+            # Tell Grafana chart to use the secret created by Terraform
+            - name: grafana.admin.existingSecret
+              value: "grafana-admin-credentials" # Default name from external-secrets TF module
+            # Specify the keys within that secret
+            - name: grafana.admin.userKey
+              value: "admin-user"
+            - name: grafana.admin.passwordKey
+              value: "admin-password"
+            # -------------------------------------
+
+          skipCrds: true
+      destination:
+        server: '{{url}}'
+        namespace: monitoring
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          - ApplyOutOfSyncOnly=true
+          - Replace=false
+          - SkipDryRunOnMissingResource=true

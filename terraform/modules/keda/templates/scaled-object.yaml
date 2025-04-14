@@ -1,0 +1,20 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: app-scaler
+  namespace: ${namespace}
+spec:
+  scaleTargetRef:
+    name: ${deployment_name}
+    kind: Deployment
+  minReplicaCount: 2
+  maxReplicaCount: 10
+  pollingInterval: 15
+  cooldownPeriod: 60
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: ${prometheus_url}
+      metricName: http_requests_per_second
+      threshold: '10'
+      query: sum(rate(http_requests_total{app="${deployment_name}"}[5m]))

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluentd-forwarder
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: fluentd
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+data:
+  fluentd.conf: |-
+{{ .Values.fluentd.configMap | indent 4 }}

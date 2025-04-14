@@ -1,0 +1,255 @@
+# Terraform & Terragrunt files
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terragrunt-cache/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+.terraform/
+terraform.log
+.terragrunt-external-dependency-*
+.terragrunt-source-output
+
+# AWS credentials and configuration
+.aws/
+aws-credentials
+aws-config
+*.pem
+credentials
+*.pkcs12
+*.pfx
+*.kube/config
+
+# Ansible inventory and variables
+hosts
+host_vars/
+group_vars/
+
+# Helm
+charts/**/charts/
+*.tgz
+.helm/*
+Chart.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.env
+.venv
+venv/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+.node_repl_history
+
+# Editors & IDEs
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
+.history/
+
+# IntelliJ / PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+.idea_modules/
+out/
+
+# Eclipse
+.settings/
+.classpath
+.project
+.metadata
+
+# Vim
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+*~
+.netrwhist
+Session.vim
+
+# OS specific
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Linux
+.directory
+.Trash-*
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Build artifacts
+*.deb
+*.rpm
+*.tar.gz
+*.zip
+*.tar
+*.jar
+*.war
+*.nar
+*.ear
+*.class
+*.o
+*.obj
+
+# Kubeconfig and Kubernetes auth 
+kubeconfig*
+.kube/
+*.kubeconfig
+kube.config
+.kubeconfigs/
+
+# Secrets & credentials
+*.env
+.env.*
+*.secret
+secret/
+secrets/
+*_key
+*_secret
+*_token
+*_password
+*.key
+*.crt
+*.pem
+*.cer
+*.p12
+
+# Test coverage
+.coverage
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Generated files
+.generated/
+generated/
+*.generated.*
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+.temp/
+*~
+\#*\#
+
+# Documentation build
+docs/_build/
+site/
+
+# Local backup files
+*.bak
+*.swp
+*.tmp
+*~.nib
+
+# Specific to this project
+# Ignore runtime data
+runtime/
+# Ignore user-specific configuration
+user.conf
+
+# Application-specific files that should not be in repo
+app/config/local.yaml
+app/static/uploads/
+mysql-data/
+elasticsearch-data/
+load-test-results/
+app-credentials.json
+
+# Ignore generated provider files
+**/provider.tf
+**/backend.tf
+**/generated_kubernetes_providers.tf
+
+# Ignore IDE / OS files
+.terragrunt-cache
+terraform.tfstate
+terraform.tfstate.backup
+*.tfvars
+*.tfplan
+*.tfvars.json
+.terraform.lock.hcl

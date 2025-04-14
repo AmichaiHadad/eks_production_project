@@ -1,0 +1,51 @@
+# Allow ExternalDNS egress to K8s API, DNS, and AWS Route 53 API
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: external-dns-allow-egress # Renamed for clarity
+  namespace: ${namespace} # Parameterized namespace
+spec:
+  podSelector:
+    matchLabels:
+      # Use labels consistent with the Helm chart deployment
+      app.kubernetes.io/name: external-dns
+      app.kubernetes.io/instance: external-dns
+  policyTypes:
+  - Egress
+  egress:
+  # 1. Allow egress to the Kubernetes API server endpoint
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: default
+      # Selector for the API server service IP is implicitly handled by targeting the namespace
+    ports:
+    - protocol: TCP
+      port: 443 # Default K8s API port
+    - protocol: TCP
+      port: 6443 # Alternative K8s API port
+  # 2. Allow DNS lookup within kube-system
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # 3. Allow egress to AWS APIs (including Route 53) on port 443
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0 # Allow all external IPs
+        except:
+          # Deny traffic to internal cluster CIDRs
+          - 10.0.0.0/8
+          - 172.16.0.0/12
+          - 192.168.0.0/16
+    ports:
+    - protocol: TCP
+      port: 443 

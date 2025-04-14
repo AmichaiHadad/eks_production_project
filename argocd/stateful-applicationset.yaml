@@ -1,0 +1,50 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: stateful-services
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - name: mysql
+            namespace: data
+            server: https://kubernetes.default.svc
+            values:
+              mysql_app_user_aws_secret_name: mysql-app-user-secret
+          - name: elasticsearch
+            namespace: data
+            server: https://kubernetes.default.svc
+            values:
+              replicas: "3"
+              discovery: "multi-node"
+          - name: fluentd
+            namespace: logging
+            server: https://kubernetes.default.svc
+  template:
+    metadata:
+      name: '{{name}}'
+      namespace: argocd
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/AmichaiHadad/eks_app_2.git
+        targetRevision: main
+        path: helm-chart/{{name}}
+        helm:
+          parameters:
+            - name: secrets.mysqlAppUserAwsSecretName
+              value: '{{values.mysql_app_user_aws_secret_name}}'
+            - name: replicas
+              value: '{{values.replicas}}'
+            - name: discovery
+              value: '{{values.discovery}}'
+      destination:
+        server: '{{server}}'
+        namespace: '{{namespace}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

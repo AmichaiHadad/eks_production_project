@@ -1,0 +1,135 @@
+## Argo CD Helm chart values
+
+## Server configurations
+server:
+  # Run ArgoCD server in insecure mode to prevent redirect loops
+  extraArgs:
+    - --insecure
+
+  # Server service type
+  service:
+    type: ${service_type}
+
+  # Configure ingress
+  ingress:
+    enabled: ${ingress_enabled}
+    hosts:
+      - ${ingress_host}
+    ingressClassName: "alb"
+    # For ALB with ACM, we configure it to support both HTTP and HTTPS traffic
+    # with SSL termination at the ALB to avoid redirect loops
+    annotations:
+      kubernetes.io/ingress.class: alb
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/group.name: "argocd"
+      alb.ingress.kubernetes.io/success-codes: "200-399"
+      # Add annotation for ExternalDNS
+      external-dns.alpha.kubernetes.io/hostname: ${ingress_host}
+      external-dns.alpha.kubernetes.io/ttl: "300" # Optional: set DNS record TTL
+      %{if ingress_tls_secret != ""}
+      alb.ingress.kubernetes.io/certificate-arn: ${ingress_tls_secret}
+      # Allow both HTTP and HTTPS to prevent ArgoCD redirect loops
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+      %{endif}
+    # Force the correct hostname by disabling defaults
+    paths:
+      - "/*"
+
+  # Schedule on management nodes
+  nodeSelector: ${node_selector}
+  tolerations:
+    - key: "${toleration_key}"
+      value: "${toleration_value}"
+      effect: "${toleration_effect}"
+      operator: "Equal"
+
+## Controller configurations
+controller:
+  # Schedule on management nodes
+  nodeSelector: ${node_selector}
+  tolerations:
+    - key: "${toleration_key}"
+      value: "${toleration_value}"
+      effect: "${toleration_effect}"
+      operator: "Equal"
+
+## Repo server configurations  
+repoServer:
+  # Schedule on management nodes
+  nodeSelector: ${node_selector}
+  tolerations:
+    - key: "${toleration_key}"
+      value: "${toleration_value}"
+      effect: "${toleration_effect}"
+      operator: "Equal"
+
+## ApplicationSet controller
+applicationSet:
+  enabled: true
+  # Schedule on management nodes
+  nodeSelector: ${node_selector}
+  tolerations:
+    - key: "${toleration_key}"
+      value: "${toleration_value}"
+      effect: "${toleration_effect}"
+      operator: "Equal"
+
+## Redis configurations
+redis:
+  # Schedule on management nodes
+  nodeSelector: ${node_selector}
+  tolerations:
+    - key: "${toleration_key}"
+      value: "${toleration_value}"
+      effect: "${toleration_effect}"
+      operator: "Equal"
+
+## Dex (OIDC provider)
+dex:
+  enabled: false
+
+## High Availability
+ha:
+  enabled: false
+
+## RBAC configuration
+rbac:
+  # Create cluster roles and cluster role bindings
+  create: true
+  # Policy default is to 'role:readonly' for non-admin users
+  policy.default: role:readonly
+
+## Config management plugins
+configManagementPlugins: |
+  - name: helmfile
+    init:
+      command: ["helmfile", "deps"]
+    generate:
+      command: ["helmfile", "template"]
+  - name: kustomize
+    generate:
+      command: ["kustomize", "build"]
+
+## Other configurations
+configs:
+  # Automatically sync when application is created
+  params:
+    server.insecure: true  # Enable insecure mode to prevent redirect loops
+    application.instanceLabelKey: argocd.argoproj.io/instance
+
+  # Resource customizations
+  resourceCustomizations: |
+    apps/Deployment:
+      health.lua: |
+        hs = {}
+        hs.status = "Progressing"
+        hs.message = ""
+        if obj.status ~= nil then
+          if obj.status.readyReplicas ~= nil and obj.status.readyReplicas > 0 then
+            hs.status = "Healthy"
+          elseif obj.status.replicas == 0 then
+            hs.status = "Suspended"
+          end
+        end
+        return hs

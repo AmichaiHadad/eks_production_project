@@ -1,0 +1,24 @@
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: AlertmanagerConfig
+metadata:
+  name: slack-alerts
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  route:
+    receiver: slack-receiver
+    groupBy: ['alertname', 'job']
+    groupWait: 30s
+    groupInterval: 5m
+    repeatInterval: 12h
+  receivers:
+  - name: slack-receiver
+    slackConfigs:
+    - sendResolved: true
+      channel: '#alerts'
+      apiURL:
+        key: slack_webhook_url
+        name: alertmanager-slack-webhook
+      title: '{{ `{{ .CommonAnnotations.summary }}` }}'
+      text: '{{ `{{ .CommonAnnotations.description }}` }}'

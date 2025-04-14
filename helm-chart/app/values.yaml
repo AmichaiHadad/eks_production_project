@@ -1,0 +1,141 @@
+# Default values for app
+# This is a YAML-formatted file.
+
+replicaCount: 2
+
+image:
+  repository: ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/app
+  tag: latest
+  pullPolicy: Always
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Node selector for the app pods (run on services nodes)
+nodeSelector:
+  node-role: services
+
+# No explicit tolerations as services nodes are not tainted
+
+# Resources for the app container
+resources:
+  limits:
+    cpu: 200m
+    memory: 300Mi
+  requests:
+    cpu: 100m
+    memory: 200Mi
+
+# Service configurations
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 5000
+
+# Ingress configurations
+ingress:
+  enabled: true
+  className: alb
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+  acmCertificateArn: ""
+  hosts:
+    - host: app.blizzard.co.il # This will be overridden by the ApplicationSet parameter
+      paths:
+        - path: /
+          pathType: Prefix
+
+# Environment variables
+env:
+  - name: WELCOME_MESSAGE
+    value: "Welcome to the EKS Python Demo App on Blizzard Cloud!"
+  - name: WEATHER_API_URL
+    value: "https://api.openweathermap.org/data/2.5/weather"
+
+# Secrets configuration - source from Kubernetes Secrets created by Terraform
+secrets:
+  # Define how environment variables map to Kubernetes secrets
+  envFromSecrets:
+    # Weather API Key
+    - secretName: "weather-api-key" # K8s secret created by TF (default name)
+      envVar: WEATHER_API_KEY
+      secretKey: "api-key" # Key within the K8s secret
+    # MySQL Credentials (Username)
+    - secretName: "mysql-app-credentials" # K8s secret created by TF (default name)
+      envVar: DB_USER
+      secretKey: "username" # Key within the K8s secret
+    # MySQL Credentials (Password)
+    - secretName: "mysql-app-credentials" 
+      envVar: DB_PASSWORD
+      secretKey: "password" # Key within the K8s secret
+    # MySQL Credentials (Database Name)
+    - secretName: "mysql-app-credentials"
+      envVar: DB_NAME
+      secretKey: "database" # Key within the K8s secret
+
+# Pod disruption budget for HA
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Prometheus annotations for metrics scraping
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "5000"
+
+# ServiceMonitor configuration for Prometheus Operator
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: prometheus
+  interval: 15s
+  scrapeTimeout: 10s
+
+# PrometheusRule for alerts
+prometheusRule:
+  enabled: true
+  additionalLabels:
+    release: prometheus
+  highRequestRateThreshold: 10
+  highErrorRateThreshold: 5
+  slowResponseTimeThreshold: 1
+
+# Pod security context
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+# Container security context
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
+# Liveness and readiness probes
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 5000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 5000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Database connection details (partially overridden by ApplicationSet parameters)
+db:
+  serviceName: "mysql-eks-blizzard-us-east-1" # Default, overridden by AppSet param db.serviceName
+  namespace: "data"  # Default, overridden by AppSet param db.namespace

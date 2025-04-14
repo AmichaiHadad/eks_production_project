@@ -1,0 +1,45 @@
+serviceAccount:
+  create: true
+  name: keda-operator
+  annotations:
+    eks.amazonaws.com/role-arn: ${iam_role_arn}
+
+podSecurityContext:
+  runAsUser: 1000
+  fsGroup: 1000
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# Enable pod affinity to run on management node group
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: node-role
+          operator: In
+          values:
+          - management
+
+# Tolerations should be at the same level as affinity
+tolerations:
+- key: "management"
+  operator: "Equal"
+  value: "true"
+  effect: "NoSchedule"
+
+metricsServer:
+  rbac:
+    create: true
+
+prometheus:
+  metricServer:
+    enabled: true
+    podMonitor:
+      enabled: false

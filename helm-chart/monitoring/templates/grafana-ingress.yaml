@@ -1,0 +1,38 @@
+{{ if index .Values "kube-prometheus-stack" "grafana" "enabled" }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ printf "%s-grafana" .Release.Name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
+  annotations:
+    kubernetes.io/ingress.class: alb
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    # Use the certificate ARN directly from values
+    alb.ingress.kubernetes.io/certificate-arn: {{ index .Values "kube-prometheus-stack" "grafana" "ingress" "annotations" "alb\\.ingress\\.kubernetes\\.io/certificate-arn" }}
+    # Define the hostname for ExternalDNS
+    external-dns.alpha.kubernetes.io/hostname: grafana-{{ .Values.global.region }}.blizzard.co.il
+    external-dns.alpha.kubernetes.io/ttl: "300"
+    # Set the correct owner ID to match external-dns expectations
+    external-dns.alpha.kubernetes.io/owner: "eks-blizzard-us-east-1"
+spec:
+  rules:
+    - host: grafana-{{ .Values.global.region }}.blizzard.co.il
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                # Ensure this matches the Grafana service name created by the kube-prometheus-stack chart
+                name: {{ printf "%s-grafana" .Release.Name }}
+                port:
+                  number: 80 # Default Grafana service port
+{{ end }} 
